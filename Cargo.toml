@@ -1,0 +1,20 @@
+[package]
+name = "pge-analyzer"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+eframe = "0.29"
+egui = "0.29"
+egui_plot = "0.29"
+csv = "1.3"
+serde = { version = "1.0", features = ["derive"] }
+chrono = { version = "0.4", features = ["serde"] }
+anyhow = "1.0"
+rfd = "0.14"
+image = "0.24"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
