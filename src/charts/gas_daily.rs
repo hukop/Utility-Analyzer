@@ -46,6 +46,15 @@ pub fn render_gas_daily(ui: &mut Ui, data: &GasData) {
                 "".to_string()
             }
         })
+        .label_formatter(|name, value| {
+            let timestamp = value.x as i64;
+            let date_str = if let Some(dt) = DateTime::from_timestamp(timestamp, 0) {
+                dt.format("%Y-%m-%d").to_string()
+            } else {
+                "".to_string()
+            };
+            format!("{}: {:.2}\n{}", name, value.y, date_str)
+        })
         .show(ui, |plot_ui| {
             plot_ui.line(line);
             plot_ui.line(smooth_line);

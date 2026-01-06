@@ -13,6 +13,7 @@ struct PgeAnalyzerApp {
     current_view: ChartView,
     error_message: Option<String>,
     data_dir: PathBuf,
+    heatmap_state: charts::HeatmapState,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -25,6 +26,7 @@ impl Default for PgeAnalyzerApp {
             current_view: ChartView::DailyKwh,
             error_message: None,
             data_dir,
+            heatmap_state: charts::HeatmapState::default(),
         }
     }
 }
@@ -152,7 +154,11 @@ impl PgeAnalyzerApp {
             };
             
             ui.add_enabled_ui(enabled, |ui| {
-                if ui.selectable_label(is_selected, view.name()).clicked() {
+                let mut text = egui::RichText::new(view.name());
+                if is_selected {
+                    text = text.color(egui::Color32::WHITE);
+                }
+                if ui.selectable_label(is_selected, text).clicked() {
                     self.current_view = view;
                 }
             });
@@ -178,21 +184,21 @@ impl PgeAnalyzerApp {
             }
             ChartView::WeekdayHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_weekday_heatmap(ui, data);
+                    charts::render_weekday_heatmap(ui, data, &mut self.heatmap_state);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
             }
             ChartView::DailyHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_daily_heatmap(ui, data);
+                    charts::render_daily_heatmap(ui, data, &mut self.heatmap_state);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
             }
             ChartView::CostHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_cost_heatmap(ui, data);
+                    charts::render_cost_heatmap(ui, data, &mut self.heatmap_state);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }

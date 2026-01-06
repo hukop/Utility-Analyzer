@@ -18,6 +18,7 @@ pub fn apply_custom_style(ctx: &Context) {
     visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(251, 251, 251);
     visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(229, 229, 229);
     visuals.widgets.active.bg_fill = egui::Color32::from_rgb(0, 120, 212);
+    visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
     
     // Rounded corners
     visuals.widgets.noninteractive.rounding = egui::Rounding::same(4.0);

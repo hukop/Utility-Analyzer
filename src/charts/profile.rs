@@ -1,6 +1,6 @@
 use crate::data::ElectricData;
 use egui::Ui;
-use egui_plot::{Line, Plot, PlotPoints};
+use egui_plot::{Line, Plot, PlotPoints, GridMark};
 
 pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
     let profile = data.hourly_profile();
@@ -13,14 +13,48 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
         .collect();
     
     let line = Line::new(points)
-        .color(egui::Color32::from_rgb(44, 160, 44))
+        .color(egui::Color32::from_rgb(31, 119, 180))
         .width(2.0)
         .name("Average kWh");
     
     Plot::new("hourly_profile_plot")
-        .view_aspect(2.5)
-        .legend(egui_plot::Legend::default())
+        .view_aspect(4.0)
+        .include_x(0.0)
+        .include_x(23.0)
+        .set_margin_fraction(egui::vec2(0.02, 0.1))
+        .allow_drag(false)
+        .allow_zoom(false)
+        .allow_scroll(false)
+        .allow_double_click_reset(false)
+        .show_grid([false, true]) // Hide default vertical grid lines (solid)
+        .x_axis_formatter(|x, _range| {
+            let hr = x.value.round() as i32;
+            if (x.value - hr as f64).abs() < 0.1 && hr >= 0 && hr <= 23 {
+                format!("{}", hr)
+            } else {
+                "".to_string()
+            }
+        })
+        .x_grid_spacer(|_input| {
+            let mut marks = vec![];
+            for i in 0..=23 {
+                // Use major step_size to ensure labels appear
+                marks.push(GridMark {
+                    value: i as f64,
+                    step_size: 24.0,
+                });
+            }
+            marks
+        })
         .show(ui, |plot_ui| {
+            // Manually draw dashed vertical grid lines
+            for i in 0..=23 {
+                plot_ui.vline(
+                    egui_plot::VLine::new(i as f64)
+                        .style(egui_plot::LineStyle::Dashed{length: 5.0})
+                        .color(egui::Color32::from_gray(200)), // Subtle grid color
+                );
+            }
             plot_ui.line(line);
         });
 }

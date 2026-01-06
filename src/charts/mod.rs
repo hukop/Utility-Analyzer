@@ -12,3 +12,10 @@ pub use daily_heatmap::*;
 pub use cost_heatmap::*;
 pub use profile::*;
 pub use gas_daily::*;
+
+#[derive(Debug, Clone, Default)]
+pub struct HeatmapState {
+    pub selection_start: Option<(usize, usize)>, // (day_idx, hour_idx)
+    pub selection_end: Option<(usize, usize)>,
+    pub is_dragging: bool,
+}
