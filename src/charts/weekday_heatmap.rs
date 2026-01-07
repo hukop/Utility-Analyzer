@@ -69,35 +69,21 @@ pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heat
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0); // Remove vertical spacing
                 ui.add_space(20.0); // Space for hour labels (matches X-axis header height)
-                for (idx, weekday) in WEEKDAYS.iter().enumerate() {
+                for weekday in WEEKDAYS.iter() {
                     let (rect, _response) = ui.allocate_exact_size(
                         egui::vec2(80.0, cell_height),
                         egui::Sense::hover(),
                     );
                     
-                    // Feature 1: Mark weekends
-                    let is_weekend = idx >= 5; // Saturday(5), Sunday(6)
-                    let text_color = if is_weekend {
-                        ui.visuals().text_color()
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-
-                    if is_weekend {
-                         ui.painter().rect_stroke(
-                            rect.shrink(1.0),
-                            0.0,
-                            egui::Stroke::new(1.0, egui::Color32::from_gray(100))
-                        );
-                    }
-                    
-                    ui.painter().text(
-                        rect.center(),
-                        egui::Align2::CENTER_CENTER,
-                        *weekday,
-                        egui::FontId::proportional(14.0),
-                        text_color,
-                    );
+                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                        let text = egui::RichText::new(*weekday)
+                            .size(14.0)
+                            .color(ui.visuals().text_color());
+                        
+                        ui.centered_and_justified(|ui| {
+                            ui.label(text);
+                        });
+                    });
                 }
             });
             

@@ -71,30 +71,12 @@ pub fn render_daily_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatma
                     );
                     
                     // Parse date for weekend check
-                    // Assuming date_str is "YYYY-MM-DD"
                     let date_parsed = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok();
-                    
-                    // Feature 1: Mark weekends
                     let is_weekend = if let Some(d) = date_parsed {
                         d.weekday() == chrono::Weekday::Sat || d.weekday() == chrono::Weekday::Sun
                     } else {
                         false
                     };
-                    
-                    let text_color = if is_weekend {
-                        ui.visuals().text_color()
-                    } else {
-                        ui.visuals().weak_text_color()
-                    };
-
-                    // Draw weekday label with special style
-                    if is_weekend {
-                         ui.painter().rect_stroke(
-                            rect.shrink(1.0),
-                            0.0,
-                            egui::Stroke::new(1.0, egui::Color32::from_gray(100))
-                        );
-                    }
                     
                     let label_text = if let Some(d) = date_parsed {
                         format!("{}", d.format("%Y-%m-%d %a"))
@@ -102,13 +84,26 @@ pub fn render_daily_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatma
                         date_str.clone()
                     };
                     
-                    ui.painter().text(
-                        rect.left_center() + egui::vec2(5.0, 0.0),
-                        egui::Align2::LEFT_CENTER,
-                        label_text,
-                        egui::FontId::proportional(12.0),
-                        text_color,
-                    );
+                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                        if is_weekend {
+                            ui.painter().rect_filled(rect, 0.0, egui::Color32::from_rgb(230, 242, 255));
+                        }
+                        
+                        let mut text = egui::RichText::new(label_text);
+                        if is_weekend {
+                            text = text.size(13.0)
+                                .strong()
+                                .color(egui::Color32::from_rgb(0, 120, 212));
+                        } else {
+                            text = text.size(12.0)
+                                .color(ui.visuals().text_color());
+                        }
+                        
+                        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                            ui.add_space(5.0);
+                            ui.label(text);
+                        });
+                    });
                 }
             });
             

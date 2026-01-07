@@ -18,7 +18,7 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
         .name("Average kWh");
     
     Plot::new("hourly_profile_plot")
-        .view_aspect(4.0)
+        .view_aspect(2.0)
         .include_x(0.0)
         .include_x(23.0)
         .set_margin_fraction(egui::vec2(0.02, 0.1))
