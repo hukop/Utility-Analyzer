@@ -3,18 +3,26 @@ use chrono::{DateTime, NaiveDate, Utc};
 use csv::ReaderBuilder;
 use std::collections::HashMap;
 
+/// A single data point representing gas usage cost on a specific date.
 #[derive(Debug, Clone)]
 pub struct GasDataPoint {
+    /// The date of the gas usage.
     pub date: DateTime<Utc>,
+    /// The cost associated with this date.
     pub cost: f64,
 }
 
+/// A collection of gas usage data points.
 #[derive(Debug, Clone)]
 pub struct GasData {
+    /// The list of gas usage data points, usually sorted by date.
     pub data: Vec<GasDataPoint>,
 }
 
 impl GasData {
+    /// Loads gas usage data from a CSV string.
+    /// 
+    /// Expects a specific PGE export format with columns like "TYPE", "DATE", and "COST".
     pub fn load(csv_content: &str) -> Result<Self> {
         let mut reader = ReaderBuilder::new()
             .has_headers(true)
@@ -93,5 +101,32 @@ impl GasData {
         
         result.sort_by_key(|(dt, _)| *dt);
         result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_gas_data_load() {
+        let csv = "TYPE,DATE,COST\n\
+                  Natural gas usage,2023-01-01,$5.50\n\
+                  Natural gas usage,2023-01-02,$6.20";
+        
+        let result = GasData::load(csv).unwrap();
+        assert_eq!(result.data.len(), 2);
+        assert_eq!(result.data[0].cost, 5.50);
+        assert_eq!(result.data[1].cost, 6.20);
+    }
+
+    #[test]
+    fn test_gas_data_load_alternate_date_format() {
+        let csv = "TYPE,DATE,COST\n\
+                  Natural gas usage,01/01/2023,$5.50";
+        
+        let result = GasData::load(csv).unwrap();
+        assert_eq!(result.data.len(), 1);
+        assert_eq!(result.data[0].cost, 5.50);
     }
 }

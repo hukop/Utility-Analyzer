@@ -5,7 +5,10 @@ use std::path::{Path, PathBuf};
 
 const HEADER_PATTERN: &str = "TYPE,DATE,START TIME";
 
-/// Read CSV file with auto-detection of header line
+/// Reads a CSV file and strips leading metadata by searching for the header row.
+/// 
+/// The function looks for a line starting with "TYPE,DATE,START TIME" (case-insensitive) 
+/// and returns the content starting from that line.
 pub fn read_csv_with_header(path: &Path) -> Result<String> {
     let file = File::open(path)
         .with_context(|| format!("Failed to open file: {}", path.display()))?;
@@ -23,7 +26,7 @@ pub fn read_csv_with_header(path: &Path) -> Result<String> {
     Ok(lines[header_idx..].join("\n"))
 }
 
-/// Auto-detect CSV file by pattern in the given directory
+/// Automatically finds the first CSV file in the given directory that matches the pattern.
 pub fn autodetect_csv(dir: &Path, pattern: &str) -> Option<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         let mut matches: Vec<PathBuf> = entries
@@ -44,7 +47,7 @@ pub fn autodetect_csv(dir: &Path, pattern: &str) -> Option<PathBuf> {
     }
 }
 
-/// Open file dialog to select a CSV file
+/// Opens a native file dialog to let the user select a CSV file.
 pub fn select_csv_file() -> Option<PathBuf> {
     rfd::FileDialog::new()
         .add_filter("CSV Files", &["csv"])

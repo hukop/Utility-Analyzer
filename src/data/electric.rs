@@ -3,19 +3,29 @@ use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
 use csv::ReaderBuilder;
 use std::collections::HashMap;
 
+/// A single data point representing electric usage at a specific time.
 #[derive(Debug, Clone)]
 pub struct ElectricDataPoint {
+    /// The timestamp of the usage interval.
     pub timestamp: DateTime<Utc>,
+    /// Kilowatt-hours used during the interval.
     pub kwh: f64,
+    /// The cost associated with this interval (if available).
     pub cost: f64,
 }
 
+/// A collection of electric usage data points.
 #[derive(Debug, Clone)]
 pub struct ElectricData {
+    /// The list of usage data points, usually sorted by timestamp.
     pub data: Vec<ElectricDataPoint>,
 }
 
 impl ElectricData {
+    /// Loads electric usage data from a CSV string.
+    /// 
+    /// Expects a specific PGE export format with columns like "TYPE", "DATE", 
+    /// "START TIME", and "IMPORT (kWh)".
     pub fn load(csv_content: &str) -> Result<Self> {
         let mut reader = ReaderBuilder::new()
             .has_headers(true)
@@ -107,7 +117,7 @@ impl ElectricData {
         result
     }
     
-    /// Get average kWh by weekday and hour
+    /// Returns average kWh grouped by weekday and hour of day.
     pub fn weekday_hour_average(&self) -> [[f64; 24]; 7] {
         let mut totals = [[0.0; 24]; 7];
         let mut counts = [[0u32; 24]; 7];
@@ -132,7 +142,7 @@ impl ElectricData {
         averages
     }
     
-    /// Get hourly profile (average kWh by hour of day)
+    /// Returns average kWh grouped by hour of day (0-23).
     pub fn hourly_profile(&self) -> [f64; 24] {
         let mut totals = [0.0; 24];
         let mut counts = [0u32; 24];
@@ -153,7 +163,7 @@ impl ElectricData {
         profile
     }
     
-    /// Get daily by-hour heatmap data
+    /// Returns a list of dates and a 2D matrix of kWh by [day][hour].
     pub fn daily_hour_heatmap(&self) -> (Vec<String>, Vec<Vec<f64>>) {
         let mut daily_data: HashMap<String, [f64; 24]> = HashMap::new();
         
@@ -176,7 +186,7 @@ impl ElectricData {
         (dates, data)
     }
     
-    /// Get daily by-hour cost heatmap data
+    /// Returns a list of dates and a 2D matrix of cost by [day][hour].
     pub fn daily_hour_cost_heatmap(&self) -> (Vec<String>, Vec<Vec<f64>>) {
         let mut daily_data: HashMap<String, [f64; 24]> = HashMap::new();
         
@@ -197,5 +207,32 @@ impl ElectricData {
             .collect();
         
         (dates, data)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_electric_data_load() {
+        let csv = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
+                  Electric usage,2023-01-01,00:00,1.5,$0.30\n\
+                  Electric usage,2023-01-01,01:00,2.0,$0.40";
+        
+        let result = ElectricData::load(csv).unwrap();
+        assert_eq!(result.data.len(), 2);
+        assert_eq!(result.data[0].kwh, 1.5);
+        assert_eq!(result.data[0].cost, 0.30);
+    }
+
+    #[test]
+    fn test_electric_data_load_alternate_date_format() {
+        let csv = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
+                  Electric usage,01/01/2023,00:00,1.5,$0.30";
+        
+        let result = ElectricData::load(csv).unwrap();
+        assert_eq!(result.data.len(), 1);
+        assert_eq!(result.data[0].kwh, 1.5);
     }
 }

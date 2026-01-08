@@ -3,6 +3,7 @@ use egui::Ui;
 use egui_plot::{Line, Plot, PlotPoints, GridMark};
 
 pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
+    ui.add_space(crate::ui::styles::CHART_SPACING);
     let profile = data.hourly_profile();
     
     // Convert to plot points

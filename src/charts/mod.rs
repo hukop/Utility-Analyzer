@@ -16,10 +16,15 @@ pub use gas_daily::*;
 
 use std::collections::HashSet;
 
+/// Shared state for heatmap components, tracking selection and collapse states.
 #[derive(Debug, Clone, Default)]
 pub struct HeatmapState {
-    pub selection_start: Option<(usize, usize)>, // (day_idx, hour)
+    /// The (day_index, hour) where the selection started.
+    pub selection_start: Option<(usize, usize)>,
+    /// The (day_index, hour) where the selection ended.
     pub selection_end: Option<(usize, usize)>,
+    /// Whether the user is currently dragging to select.
     pub is_dragging: bool,
+    /// Set of month keys (YYYY-MM) that are currently collapsed.
     pub collapsed_months: HashSet<String>,
 }

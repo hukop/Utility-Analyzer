@@ -64,7 +64,7 @@ pub fn render_heatmap_component(
     }
 
     ui.label(&config.selection_label);
-    ui.add_space(20.0);
+    ui.add_space(crate::ui::styles::CHART_SPACING);
     
     egui::ScrollArea::both().show(ui, |ui| {
         let content_start_pos = ui.cursor().left_top();
@@ -165,14 +165,14 @@ pub fn render_heatmap_component(
                     
                     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
                         if is_weekend {
-                            ui.painter().rect_filled(rect, 0.0, egui::Color32::from_rgb(230, 242, 255));
+                            ui.painter().rect_filled(rect, 0.0, crate::ui::styles::weekend_bg());
                         }
                         
                         let mut text = egui::RichText::new(label_text);
                         if is_weekend {
                             text = text.size(13.0)
                                 .strong()
-                                .color(egui::Color32::from_rgb(0, 120, 212));
+                                .color(crate::ui::styles::weekend_text());
                         } else {
                             text = text.size(12.0)
                                 .color(ui.visuals().text_color());

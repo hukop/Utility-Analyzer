@@ -29,3 +29,21 @@ pub fn apply_custom_style(ctx: &Context) {
     style.visuals = visuals;
     ctx.set_style(style);
 }
+
+pub const CHART_SPACING: f32 = 20.0;
+
+pub fn weekend_bg() -> egui::Color32 {
+    egui::Color32::from_rgba_unmultiplied(0, 120, 212, 15)
+}
+
+pub fn weekend_text() -> egui::Color32 {
+    egui::Color32::from_rgb(0, 100, 200)
+}
+
+pub fn status_green() -> egui::Color32 {
+    egui::Color32::from_rgb(0, 150, 0)
+}
+
+pub fn status_red() -> egui::Color32 {
+    egui::Color32::from_rgb(200, 0, 0)
+}

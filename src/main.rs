@@ -1,3 +1,8 @@
+//! PGE Usage Analyzer
+//! 
+//! A GUI application built with eframe/egui to analyze and visualize 
+//! PG&E electric and natural gas usage data exported from their customer portal.
+
 mod data;
 mod charts;
 mod ui;
@@ -94,7 +99,7 @@ impl PgeAnalyzerApp {
         ui.separator();
         
         // File loading buttons
-        ui.label("Data Files:");
+        ui.label(egui::RichText::new("Data Files:").strong().size(15.0).color(ui.visuals().text_color()));
         
         if ui.button("📂 Load Electric CSV").clicked() {
             if let Some(path) = data::select_csv_file() {
@@ -125,23 +130,31 @@ impl PgeAnalyzerApp {
         ui.separator();
         
         // Data status
-        ui.label("Status:");
+        ui.label(egui::RichText::new("Status:").strong().size(15.0).color(ui.visuals().text_color()));
         if self.electric_data.is_some() {
-            ui.label("✓ Electric data loaded");
+            ui.label(egui::RichText::new("✔ Electric data loaded")
+                .monospace()
+                .color(ui::styles::status_green()));
         } else {
-            ui.label("✗ No electric data");
+            ui.label(egui::RichText::new("✘ No electric data")
+                .monospace()
+                .color(ui::styles::status_red()));
         }
         
         if self.gas_data.is_some() {
-            ui.label("✓ Gas data loaded");
+            ui.label(egui::RichText::new("✔ Gas data loaded")
+                .monospace()
+                .color(ui::styles::status_green()));
         } else {
-            ui.label("✗ No gas data");
+            ui.label(egui::RichText::new("✘ No gas data")
+                .monospace()
+                .color(ui::styles::status_red()));
         }
         
         ui.separator();
         
         // Chart selection
-        ui.label("Charts:");
+        ui.label(egui::RichText::new("Charts:").strong().size(15.0).color(ui.visuals().text_color()));
         
         for view in ChartView::all() {
             let is_selected = self.current_view == view;
@@ -177,7 +190,6 @@ impl PgeAnalyzerApp {
             ChartView::DailyKwh => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Daily kWh");
-                    ui.add_space(20.0);
                     charts::render_daily_kwh(ui, data);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -207,7 +219,6 @@ impl PgeAnalyzerApp {
             ChartView::HourlyProfile => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Average Daily Profile (Mean kWh by Hour)");
-                    ui.add_space(20.0);
                     charts::render_hourly_profile(ui, data);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -216,7 +227,6 @@ impl PgeAnalyzerApp {
             ChartView::GasDaily => {
                 if let Some(ref data) = self.gas_data {
                     ui.heading("Gas: Daily Usage (USD)");
-                    ui.add_space(20.0);
                     charts::render_gas_daily(ui, data);
                 } else {
                     ui.label("No gas data loaded. Please load a CSV file.");
@@ -224,31 +234,41 @@ impl PgeAnalyzerApp {
             }
         }
     }
-}
 
-impl eframe::App for PgeAnalyzerApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn handle_input(&mut self, ctx: &egui::Context) {
         // Handle global zoom with Ctrl + Mouse Wheel
         let zoom_delta = ctx.input(|i| i.zoom_delta());
         if zoom_delta != 1.0 {
             ctx.set_pixels_per_point(ctx.pixels_per_point() * zoom_delta);
         }
 
-        // Handle Up/Down key navigation for charts
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
-            let all_views = ChartView::all();
-            if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
-                let new_pos = if pos == 0 { all_views.len() - 1 } else { pos - 1 };
-                self.current_view = all_views[new_pos];
+        // Handle navigation and other shortcuts
+        ctx.input(|i| {
+            if i.key_pressed(egui::Key::ArrowUp) {
+                let all_views = ChartView::all();
+                if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
+                    let new_pos = if pos == 0 { all_views.len() - 1 } else { pos - 1 };
+                    self.current_view = all_views[new_pos];
+                }
             }
-        }
-        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
-            let all_views = ChartView::all();
-            if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
-                let new_pos = (pos + 1) % all_views.len();
-                self.current_view = all_views[new_pos];
+            if i.key_pressed(egui::Key::ArrowDown) {
+                let all_views = ChartView::all();
+                if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
+                    let new_pos = (pos + 1) % all_views.len();
+                    self.current_view = all_views[new_pos];
+                }
             }
-        }
+            if i.key_pressed(egui::Key::Escape) {
+                self.heatmap_state.selection_start = None;
+                self.heatmap_state.selection_end = None;
+            }
+        });
+    }
+}
+
+impl eframe::App for PgeAnalyzerApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.handle_input(ctx);
 
         egui::SidePanel::left("sidebar")
             .min_width(200.0)

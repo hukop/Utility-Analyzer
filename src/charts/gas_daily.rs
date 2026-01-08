@@ -4,6 +4,7 @@ use egui::Ui;
 use egui_plot::{Line, Plot, PlotPoints};
 
 pub fn render_gas_daily(ui: &mut Ui, data: &GasData) {
+    ui.add_space(crate::ui::styles::CHART_SPACING);
     let daily = data.daily_totals();
     
     if daily.is_empty() {
