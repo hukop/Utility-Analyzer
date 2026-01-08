@@ -67,12 +67,79 @@ pub fn render_heatmap_component(
     
     egui::ScrollArea::both().show(ui, |ui| {
         let content_start_pos = ui.cursor().left_top();
+        
+        // Month summaries
+        let mut month_sums = std::collections::HashMap::<String, f64>::new();
+        if config.show_weekend_emphasis {
+            for (idx, label) in dates.iter().enumerate() {
+                let month = &label[0..7]; // YYYY-MM
+                *month_sums.entry(month.to_string()).or_insert(0.0) += heatmap_data[idx].iter().sum::<f64>();
+            }
+        }
+
         ui.horizontal(|ui| {
             // Y-axis labels
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                 ui.add_space(20.0); // Header offset
+                
+                let mut last_month = String::new();
                 for (_idx, label) in dates.iter().enumerate() {
+                    let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
+                    
+                    if config.show_weekend_emphasis && month != last_month {
+                        let header_rect = ui.allocate_exact_size(
+                            egui::vec2(config.y_label_width, 25.0),
+                            egui::Sense::click(),
+                        ).0;
+                        
+                        let is_collapsed = state.collapsed_months.contains(month);
+                        let response = ui.interact(header_rect, ui.id().with(format!("{}_left", month)), egui::Sense::click());
+                        
+                        if response.clicked() {
+                            if is_collapsed {
+                                state.collapsed_months.remove(month);
+                            } else {
+                                state.collapsed_months.insert(month.to_string());
+                            }
+                        }
+
+                        let bg_color = if response.hovered() {
+                            if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
+                        } else {
+                            if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) }
+                        };
+                        
+                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
+                        ui.painter().line_segment(
+                            [header_rect.left_bottom(), header_rect.right_bottom()], 
+                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
+                        );
+                        
+                        let icon = if is_collapsed { ">" } else { "v" };
+                        ui.painter().text(
+                            header_rect.left_center() + egui::vec2(10.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            icon,
+                            egui::FontId::proportional(14.0),
+                            ui.visuals().text_color()
+                        );
+                        
+                        ui.painter().text(
+                            header_rect.left_center() + egui::vec2(28.0, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            month,
+                            egui::FontId::proportional(14.0),
+                            ui.visuals().text_color()
+                        );
+                        
+                        last_month = month.to_string();
+                    }
+
+                    if config.show_weekend_emphasis && state.collapsed_months.contains(month) {
+                        continue;
+                    }
+
                     let (rect, _response) = ui.allocate_exact_size(
                         egui::vec2(config.y_label_width, cell_height),
                         egui::Sense::hover(),
@@ -154,7 +221,60 @@ pub fn render_heatmap_component(
                 });
                 
                 // Heatmap cells
+                let mut last_month = String::new();
                 for (day_idx, day_data) in heatmap_data.iter().enumerate() {
+                    let label = &dates[day_idx];
+                    let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
+
+                    if config.show_weekend_emphasis && month != last_month {
+                        let header_rect = ui.allocate_exact_size(
+                            egui::vec2(24.0 * cell_width, 25.0),
+                            egui::Sense::click(),
+                        ).0;
+                        
+                        let response = ui.interact(header_rect, ui.id().with(format!("{}_right", month)), egui::Sense::click());
+                        if response.clicked() {
+                            if state.collapsed_months.contains(month) {
+                                state.collapsed_months.remove(month);
+                            } else {
+                                state.collapsed_months.insert(month.to_string());
+                            }
+                        }
+
+                        let bg_color = if response.hovered() {
+                            if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
+                        } else {
+                            if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) }
+                        };
+                        
+                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
+                        ui.painter().line_segment(
+                            [header_rect.left_bottom(), header_rect.right_bottom()], 
+                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
+                        );
+                        
+                        let sum = month_sums.get(month).cloned().unwrap_or(0.0);
+                        let val_text = if config.unit == "$" {
+                            format!("Total: ${:.2}", sum)
+                        } else {
+                            format!("Total: {:.2} {}", sum, config.unit)
+                        };
+
+                        ui.painter().text(
+                            header_rect.right_center() + egui::vec2(-10.0, 0.0),
+                            egui::Align2::RIGHT_CENTER,
+                            val_text,
+                            egui::FontId::proportional(12.0),
+                            ui.visuals().text_color()
+                        );
+                        
+                        last_month = month.to_string();
+                    }
+
+                    if config.show_weekend_emphasis && state.collapsed_months.contains(month) {
+                        continue;
+                    }
+
                     let date_parsed = if config.show_weekend_emphasis {
                         chrono::NaiveDate::parse_from_str(&dates[day_idx], "%Y-%m-%d").ok()
                     } else {
@@ -223,15 +343,23 @@ pub fn render_heatmap_component(
                 }
 
                 // Final pass: Draw weekend boundaries OVER everything
-                // These span both labels and cells for a clean look
                 let stroke = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(120));
                 let total_width = config.y_label_width + (24.0 * cell_width);
-                
-                // Get the top-left of the heatmap area (post-header offset)
-                // We'll calculate Y relative to the start of the ScrollArea content
                 let mut current_y = 20.0; // Starting offset for header
                 
+                let mut last_month = String::new();
                 for (_idx, label) in dates.iter().enumerate() {
+                    let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
+                    
+                    if config.show_weekend_emphasis && month != last_month {
+                        current_y += 25.0; // Account for month header
+                        last_month = month.to_string();
+                    }
+
+                    if config.show_weekend_emphasis && state.collapsed_months.contains(month) {
+                        continue;
+                    }
+
                     let date_parsed = chrono::NaiveDate::parse_from_str(label, "%Y-%m-%d").ok();
                     let (is_sat, is_sun) = if let Some(d) = date_parsed {
                         (d.weekday() == chrono::Weekday::Sat, d.weekday() == chrono::Weekday::Sun)
@@ -241,20 +369,15 @@ pub fn render_heatmap_component(
 
                     let x_start = content_start_pos.x;
                     
-                    // Top border if Saturday
                     if is_sat {
                         let y = content_start_pos.y + current_y;
                         ui.painter().line_segment([egui::pos2(x_start, y), egui::pos2(x_start + total_width, y)], stroke);
                     }
                     
-                    // Bottom border if Sunday
                     if is_sun {
                         let y = content_start_pos.y + current_y + cell_height;
                         ui.painter().line_segment([egui::pos2(x_start, y), egui::pos2(x_start + total_width, y)], stroke);
                     }
-
-                    // Also check for "day after Sunday" case in case of contiguous blocks
-                    // but usually bottom of Sun covers it.
                     
                     current_y += cell_height;
                 }

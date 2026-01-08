@@ -14,9 +14,12 @@ pub use cost_heatmap::*;
 pub use profile::*;
 pub use gas_daily::*;
 
+use std::collections::HashSet;
+
 #[derive(Debug, Clone, Default)]
 pub struct HeatmapState {
     pub selection_start: Option<(usize, usize)>, // (day_idx, hour)
     pub selection_end: Option<(usize, usize)>,
     pub is_dragging: bool,
+    pub collapsed_months: HashSet<String>,
 }
