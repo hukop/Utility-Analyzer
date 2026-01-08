@@ -177,6 +177,7 @@ impl PgeAnalyzerApp {
             ChartView::DailyKwh => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Daily kWh");
+                    ui.add_space(20.0);
                     charts::render_daily_kwh(ui, data);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -206,6 +207,7 @@ impl PgeAnalyzerApp {
             ChartView::HourlyProfile => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Average Daily Profile (Mean kWh by Hour)");
+                    ui.add_space(20.0);
                     charts::render_hourly_profile(ui, data);
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -214,6 +216,7 @@ impl PgeAnalyzerApp {
             ChartView::GasDaily => {
                 if let Some(ref data) = self.gas_data {
                     ui.heading("Gas: Daily Usage (USD)");
+                    ui.add_space(20.0);
                     charts::render_gas_daily(ui, data);
                 } else {
                     ui.label("No gas data loaded. Please load a CSV file.");

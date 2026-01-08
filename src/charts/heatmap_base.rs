@@ -64,6 +64,7 @@ pub fn render_heatmap_component(
     }
 
     ui.label(&config.selection_label);
+    ui.add_space(20.0);
     
     egui::ScrollArea::both().show(ui, |ui| {
         let content_start_pos = ui.cursor().left_top();
@@ -116,20 +117,20 @@ pub fn render_heatmap_component(
                             egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
                         );
                         
-                        let icon = if is_collapsed { ">" } else { "v" };
                         ui.painter().text(
                             header_rect.left_center() + egui::vec2(10.0, 0.0),
                             egui::Align2::LEFT_CENTER,
-                            icon,
+                            month,
                             egui::FontId::proportional(14.0),
                             ui.visuals().text_color()
                         );
                         
+                        let icon = if is_collapsed { "⏵" } else { "⏷" };
                         ui.painter().text(
-                            header_rect.left_center() + egui::vec2(28.0, 0.0),
+                            header_rect.left_center() + egui::vec2(75.0, 0.0),
                             egui::Align2::LEFT_CENTER,
-                            month,
-                            egui::FontId::proportional(14.0),
+                            icon,
+                            egui::FontId::monospace(14.0),
                             ui.visuals().text_color()
                         );
                         
