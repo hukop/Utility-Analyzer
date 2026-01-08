@@ -90,9 +90,15 @@ cargo run
 # Debug build
 .\target\debug\pge-analyzer.exe
 
-# Release build
+# Release build (recommended for production)
 .\target\release\pge-analyzer.exe
 ```
+
+### Windows GUI Application
+
+**✅ No Console Window**: The Windows release build is configured as a GUI application, so when you double-click the executable, only the application window opens - no terminal window appears.
+
+**Note**: The debug build (`cargo run`) will still show a console window for development purposes. Use the release build for the best user experience.
 
 ## Usage
 
@@ -115,6 +121,7 @@ cargo run
 pge-analyzer/
 ├── src/
 │   ├── main.rs              # Application entry point
+│   ├── config.rs            # Configuration management
 │   ├── data/                # Data loading and processing
 │   │   ├── mod.rs
 │   │   ├── loader.rs        # CSV file handling
@@ -131,6 +138,8 @@ pge-analyzer/
 │   └── ui/                  # UI components and styling
 │       ├── mod.rs
 │       └── styles.rs
+├── build.rs                 # Windows GUI subsystem configuration
+├── config.example.toml       # Sample configuration file
 └── Cargo.toml               # Dependencies and configuration
 ```
 

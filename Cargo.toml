@@ -3,6 +3,10 @@ name = "pge-analyzer"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "pge-analyzer"
+path = "src/main.rs"
+
 [dependencies]
 eframe = "0.29"
 egui = "0.29"

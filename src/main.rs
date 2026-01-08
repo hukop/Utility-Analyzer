@@ -307,7 +307,29 @@ impl eframe::App for PgeAnalyzerApp {
     }
 }
 
+#[cfg(target_os = "windows")]
+#[no_mangle]
+pub extern "system" fn WinMain(
+    _hinstance: *mut std::ffi::c_void,
+    _hprevinstance: *mut std::ffi::c_void,
+    _lpstrcmd: *mut u16,
+    _ncmdshow: i32,
+) -> i32 {
+    match run_app() {
+        Ok(_) => 0,
+        Err(e) => {
+            // In a GUI app, we can't easily show errors, so just return error code
+            eprintln!("Application error: {}", e);
+            1
+        }
+    }
+}
+
 fn main() -> Result<(), eframe::Error> {
+    run_app()
+}
+
+fn run_app() -> Result<(), eframe::Error> {
     let config = Config::load().unwrap_or_else(|e| {
         eprintln!("Warning: Failed to load config, using defaults: {}", e);
         Config::default()
