@@ -232,7 +232,7 @@ impl eframe::App for PgeAnalyzerApp {
         }
 
         egui::SidePanel::left("sidebar")
-            .min_width(250.0)
+            .min_width(200.0)
             .show(ctx, |ui| {
                 self.render_sidebar(ui);
             });
