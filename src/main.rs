@@ -231,6 +231,22 @@ impl eframe::App for PgeAnalyzerApp {
             ctx.set_pixels_per_point(ctx.pixels_per_point() * zoom_delta);
         }
 
+        // Handle Up/Down key navigation for charts
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowUp)) {
+            let all_views = ChartView::all();
+            if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
+                let new_pos = if pos == 0 { all_views.len() - 1 } else { pos - 1 };
+                self.current_view = all_views[new_pos];
+            }
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::ArrowDown)) {
+            let all_views = ChartView::all();
+            if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
+                let new_pos = (pos + 1) % all_views.len();
+                self.current_view = all_views[new_pos];
+            }
+        }
+
         egui::SidePanel::left("sidebar")
             .min_width(200.0)
             .show(ctx, |ui| {
