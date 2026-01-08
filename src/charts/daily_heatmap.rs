@@ -14,6 +14,7 @@ pub fn render_daily_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatma
         x_label_interval: 3,
         y_label_width: 100.0,
         cell_height: 25.0,
+        monthly_sums: &data.monthly_kwh_sums,
     };
 
     render_heatmap_component(ui, &dates, &heatmap_data, state, config);

@@ -14,6 +14,7 @@ pub fn render_cost_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatmap
         x_label_interval: 3,
         y_label_width: 100.0,
         cell_height: 25.0,
+        monthly_sums: &data.monthly_cost_sums,
     };
 
     render_heatmap_component(ui, &dates, &heatmap_data, state, config);

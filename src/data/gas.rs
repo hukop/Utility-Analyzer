@@ -58,26 +58,25 @@ impl GasData {
             let date_str = record.get(date_idx).context("Missing DATE field")?;
             let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
                 .or_else(|_| NaiveDate::parse_from_str(date_str, "%m/%d/%Y"))
-                .context("Failed to parse date")?
-                .and_hms_opt(0, 0, 0)
-                .context("Failed to create datetime")?
-                .and_utc();
+                .with_context(|| format!("Failed to parse date: {}", date_str))?;
+            
+            let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(
+                date.and_hms_opt(0, 0, 0).unwrap(), Utc);
             
             // Parse cost
             let cost_str = record.get(cost_idx).context("Missing COST field")?;
-            let cost = cost_str
-                .replace('$', "")
-                .replace(',', "")
-                .parse::<f64>()
-                .unwrap_or(0.0);
+            let cost: f64 = cost_str.trim_start_matches('$').parse().context("Failed to parse cost")?;
             
-            data.push(GasDataPoint { date, cost });
+            data.push(GasDataPoint {
+                date: timestamp,
+                cost,
+            });
         }
         
-        // Sort by date
-        data.sort_by_key(|d| d.date);
+        // Sort data by date
+        data.sort_by_key(|p| p.date);
         
-        Ok(GasData { data })
+        Ok(Self { data })
     }
     
     /// Get daily totals (already daily, but aggregate just in case)

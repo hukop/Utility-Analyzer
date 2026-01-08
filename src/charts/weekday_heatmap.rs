@@ -29,6 +29,7 @@ pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heat
         x_label_interval: 2,
         y_label_width: 80.0,
         cell_height: 30.0,
+        monthly_sums: &std::collections::HashMap::new(),
     };
 
     render_heatmap_component(ui, &dates, &heatmap_data, state, config);

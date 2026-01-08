@@ -142,6 +142,49 @@ pge-analyzer/
 - **chrono**: Date and time handling
 - **anyhow**: Error handling
 - **rfd**: Native file dialogs
+- **toml**: Configuration file support
+- **dirs**: Cross-platform config directory detection
+
+## Configuration
+
+The application supports configuration via `config.toml` file:
+
+### Configuration File Location
+
+- **Windows**: `%APPDATA%\pge-analyzer\config.toml`
+- **Linux/macOS**: `~/.config/pge-analyzer/config.toml`
+
+### Creating Configuration
+
+Copy `config.example.toml` to the appropriate location and modify as needed:
+
+```bash
+# Windows
+copy config.example.toml "%APPDATA%\pge-analyzer\config.toml"
+
+# Linux/macOS
+mkdir -p ~/.config/pge-analyzer
+cp config.example.toml ~/.config/pge-analyzer/config.toml
+```
+
+### Configuration Options
+
+```toml
+# Default directory to look for CSV files
+default_data_dir = "C:/Users/YourName/Documents/PGE"
+
+[window]
+width = 1400.0
+height = 900.0
+maximized = false
+
+[ui]
+default_chart = "DailyKwh"  # Options: DailyKwh, WeekdayHeatmap, DailyHeatmap, CostHeatmap, HourlyProfile, GasDaily
+dark_mode = true           # Force dark mode (optional)
+font_scale = 1.0           # Font size multiplier
+```
+
+If no configuration file exists, the application will create one with default settings.
 
 ## Comparison with Python Dashboard
 

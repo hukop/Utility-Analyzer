@@ -19,6 +19,10 @@ pub struct ElectricDataPoint {
 pub struct ElectricData {
     /// The list of usage data points, usually sorted by timestamp.
     pub data: Vec<ElectricDataPoint>,
+    /// Pre-calculated sums of usage (kWh) per month (YYYY-MM).
+    pub monthly_kwh_sums: HashMap<String, f64>,
+    /// Pre-calculated sums of cost ($) per month (YYYY-MM).
+    pub monthly_cost_sums: HashMap<String, f64>,
 }
 
 impl ElectricData {
@@ -47,6 +51,8 @@ impl ElectricData {
         let cost_idx = headers.iter().position(|h| h == "TOTAL IMPORT COST");
         
         let mut data = Vec::new();
+        let mut monthly_kwh_sums = HashMap::new();
+        let mut monthly_cost_sums = HashMap::new();
         
         for result in reader.records() {
             let record = result?;
@@ -60,28 +66,33 @@ impl ElectricData {
                 continue;
             }
             
-            // Parse timestamp
-            let date = record.get(date_idx).context("Missing DATE field")?;
-            let start_time = record.get(start_time_idx).context("Missing START TIME field")?;
-            let datetime_str = format!("{} {}", date, start_time);
-            let timestamp = NaiveDateTime::parse_from_str(&datetime_str, "%Y-%m-%d %H:%M")
-                .or_else(|_| NaiveDateTime::parse_from_str(&datetime_str, "%m/%d/%Y %H:%M"))
-                .context("Failed to parse datetime")?
-                .and_utc();
+            // Parse date and time
+            let date_str = record.get(date_idx).context("Missing DATE field")?;
+            let time_str = record.get(start_time_idx).context("Missing START TIME field")?;
             
-            // Parse kWh
+            let dt = NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%Y-%m-%d %H:%M")
+                .or_else(|_| NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%m/%d/%Y %H:%M"))
+                .with_context(|| format!("Failed to parse date/time: {} {}", date_str, time_str))?;
+            
+            let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc);
+            
+            // Parse usage (kWh)
             let kwh_str = record.get(kwh_idx).context("Missing kWh field")?;
-            let kwh = kwh_str.parse::<f64>().unwrap_or(0.0);
+            let kwh: f64 = kwh_str.parse().context("Failed to parse kWh")?;
             
             // Parse cost (optional)
             let cost = if let Some(idx) = cost_idx {
-                record.get(idx)
-                    .and_then(|c| c.replace('$', "").replace(',', "").parse::<f64>().ok())
-                    .unwrap_or(0.0)
+                let cost_str = record.get(idx).unwrap_or("$0.00");
+                cost_str.trim_start_matches('$').parse::<f64>().unwrap_or(0.0)
             } else {
                 0.0
             };
             
+            // Update monthly sums
+            let month_key = dt.format("%Y-%m").to_string();
+            *monthly_kwh_sums.entry(month_key.clone()).or_insert(0.0) += kwh;
+            *monthly_cost_sums.entry(month_key).or_insert(0.0) += cost;
+
             data.push(ElectricDataPoint {
                 timestamp,
                 kwh,
@@ -89,10 +100,10 @@ impl ElectricData {
             });
         }
         
-        // Sort by timestamp
-        data.sort_by_key(|d| d.timestamp);
+        // Sort data by timestamp
+        data.sort_by_key(|p| p.timestamp);
         
-        Ok(ElectricData { data })
+        Ok(Self { data, monthly_kwh_sums, monthly_cost_sums })
     }
     
     /// Get daily totals
@@ -234,5 +245,25 @@ mod tests {
         let result = ElectricData::load(csv).unwrap();
         assert_eq!(result.data.len(), 1);
         assert_eq!(result.data[0].kwh, 1.5);
+    }
+
+    #[test]
+    fn test_electric_monthly_sums() {
+        let csv = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
+                  Electric usage,2023-01-01,00:00,1.0,$0.20\n\
+                  Electric usage,2023-01-02,00:00,2.0,$0.40\n\
+                  Electric usage,2023-02-01,00:00,3.0,$0.60";
+        
+        let result = ElectricData::load(csv).unwrap();
+        
+        let jan_kwh = result.monthly_kwh_sums.get("2023-01").unwrap();
+        let jan_cost = result.monthly_cost_sums.get("2023-01").unwrap();
+        let feb_kwh = result.monthly_kwh_sums.get("2023-02").unwrap();
+        let feb_cost = result.monthly_cost_sums.get("2023-02").unwrap();
+        
+        assert!((jan_kwh - 3.0).abs() < 1e-10);
+        assert!((jan_cost - 0.60).abs() < 1e-10);
+        assert!((feb_kwh - 3.0).abs() < 1e-10);
+        assert!((feb_cost - 0.60).abs() < 1e-10);
     }
 }

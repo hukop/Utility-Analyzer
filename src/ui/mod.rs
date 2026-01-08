@@ -34,4 +34,15 @@ impl ChartView {
             Self::GasDaily => "Gas: Daily Usage (USD)",
         }
     }
+    
+    pub fn from_str(s: &str) -> Self {
+        match s {
+            "WeekdayHeatmap" => Self::WeekdayHeatmap,
+            "DailyHeatmap" => Self::DailyHeatmap,
+            "CostHeatmap" => Self::CostHeatmap,
+            "HourlyProfile" => Self::HourlyProfile,
+            "GasDaily" => Self::GasDaily,
+            _ => Self::DailyKwh, // Default fallback
+        }
+    }
 }

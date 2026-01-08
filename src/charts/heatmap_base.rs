@@ -3,7 +3,7 @@ use crate::charts::colormap::get_viridis_color;
 use crate::charts::HeatmapState;
 use chrono::Datelike;
 
-pub struct HeatmapConfig {
+pub struct HeatmapConfig<'a> {
     pub title: String,
     pub unit: String,
     pub selection_label: String,
@@ -11,6 +11,7 @@ pub struct HeatmapConfig {
     pub x_label_interval: usize,
     pub y_label_width: f32,
     pub cell_height: f32,
+    pub monthly_sums: &'a std::collections::HashMap<String, f64>,
 }
 
 pub fn render_heatmap_component(
@@ -18,7 +19,7 @@ pub fn render_heatmap_component(
     dates: &[String],
     heatmap_data: &[Vec<f64>],
     state: &mut HeatmapState,
-    config: HeatmapConfig,
+    config: HeatmapConfig<'_>,
 ) {
     if dates.is_empty() {
         ui.label("No data available");
@@ -68,15 +69,6 @@ pub fn render_heatmap_component(
     
     egui::ScrollArea::both().show(ui, |ui| {
         let content_start_pos = ui.cursor().left_top();
-        
-        // Month summaries
-        let mut month_sums = std::collections::HashMap::<String, f64>::new();
-        if config.show_weekend_emphasis {
-            for (idx, label) in dates.iter().enumerate() {
-                let month = &label[0..7]; // YYYY-MM
-                *month_sums.entry(month.to_string()).or_insert(0.0) += heatmap_data[idx].iter().sum::<f64>();
-            }
-        }
 
         ui.horizontal(|ui| {
             // Y-axis labels
@@ -85,12 +77,12 @@ pub fn render_heatmap_component(
                 ui.add_space(20.0); // Header offset
                 
                 let mut last_month = String::new();
-                for (_idx, label) in dates.iter().enumerate() {
+                for label in dates.iter() {
                     let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
                     
                     if config.show_weekend_emphasis && month != last_month {
                         let header_rect = ui.allocate_exact_size(
-                            egui::vec2(config.y_label_width, 25.0),
+                            egui::vec2(config.y_label_width, crate::ui::styles::MONTH_HEADER_HEIGHT),
                             egui::Sense::click(),
                         ).0;
                         
@@ -107,9 +99,7 @@ pub fn render_heatmap_component(
 
                         let bg_color = if response.hovered() {
                             if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
-                        } else {
-                            if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) }
-                        };
+                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) };
                         
                         ui.painter().rect_filled(header_rect, 0.0, bg_color);
                         ui.painter().line_segment(
@@ -118,19 +108,19 @@ pub fn render_heatmap_component(
                         );
                         
                         ui.painter().text(
-                            header_rect.left_center() + egui::vec2(10.0, 0.0),
+                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
                             egui::Align2::LEFT_CENTER,
                             month,
-                            egui::FontId::proportional(14.0),
+                            egui::FontId::proportional(crate::ui::styles::MONTH_HEADER_FONT_SIZE),
                             ui.visuals().text_color()
                         );
                         
                         let icon = if is_collapsed { "⏵" } else { "⏷" };
                         ui.painter().text(
-                            header_rect.left_center() + egui::vec2(75.0, 0.0),
+                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_TOGGLE_OFFSET, 0.0),
                             egui::Align2::LEFT_CENTER,
                             icon,
-                            egui::FontId::monospace(14.0),
+                            egui::FontId::monospace(crate::ui::styles::MONTH_HEADER_FONT_SIZE),
                             ui.visuals().text_color()
                         );
                         
@@ -170,11 +160,11 @@ pub fn render_heatmap_component(
                         
                         let mut text = egui::RichText::new(label_text);
                         if is_weekend {
-                            text = text.size(13.0)
+                            text = text.size(crate::ui::styles::MONTH_HEADER_FONT_SIZE - 1.0)
                                 .strong()
                                 .color(crate::ui::styles::weekend_text());
                         } else {
-                            text = text.size(12.0)
+                            text = text.size(crate::ui::styles::BODY_FONT_SIZE)
                                 .color(ui.visuals().text_color());
                         }
                         
@@ -214,7 +204,7 @@ pub fn render_heatmap_component(
                                 rect.center(),
                                 egui::Align2::CENTER_CENTER,
                                 label,
-                                egui::FontId::proportional(12.0),
+                                egui::FontId::proportional(crate::ui::styles::AXIS_FONT_SIZE),
                                 ui.visuals().text_color(),
                             );
                         }
@@ -229,7 +219,7 @@ pub fn render_heatmap_component(
 
                     if config.show_weekend_emphasis && month != last_month {
                         let header_rect = ui.allocate_exact_size(
-                            egui::vec2(24.0 * cell_width, 25.0),
+                            egui::vec2(24.0 * cell_width, crate::ui::styles::MONTH_HEADER_HEIGHT),
                             egui::Sense::click(),
                         ).0;
                         
@@ -244,9 +234,7 @@ pub fn render_heatmap_component(
 
                         let bg_color = if response.hovered() {
                             if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
-                        } else {
-                            if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) }
-                        };
+                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) };
                         
                         ui.painter().rect_filled(header_rect, 0.0, bg_color);
                         ui.painter().line_segment(
@@ -254,7 +242,7 @@ pub fn render_heatmap_component(
                             egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
                         );
                         
-                        let sum = month_sums.get(month).cloned().unwrap_or(0.0);
+                        let sum = config.monthly_sums.get(month).cloned().unwrap_or(0.0);
                         let val_text = if config.unit == "$" {
                             format!("Total: ${:.2}", sum)
                         } else {
@@ -262,10 +250,10 @@ pub fn render_heatmap_component(
                         };
 
                         ui.painter().text(
-                            header_rect.right_center() + egui::vec2(-10.0, 0.0),
+                            header_rect.right_center() + egui::vec2(-crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
                             egui::Align2::RIGHT_CENTER,
                             val_text,
-                            egui::FontId::proportional(12.0),
+                            egui::FontId::proportional(crate::ui::styles::MONTH_SUMMARY_FONT_SIZE),
                             ui.visuals().text_color()
                         );
                         
@@ -349,7 +337,7 @@ pub fn render_heatmap_component(
                 let mut current_y = 20.0; // Starting offset for header
                 
                 let mut last_month = String::new();
-                for (_idx, label) in dates.iter().enumerate() {
+                for label in dates.iter() {
                     let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
                     
                     if config.show_weekend_emphasis && month != last_month {

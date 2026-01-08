@@ -30,7 +30,7 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
         .show_grid([false, true]) // Hide default vertical grid lines (solid)
         .x_axis_formatter(|x, _range| {
             let hr = x.value.round() as i32;
-            if (x.value - hr as f64).abs() < 0.1 && hr >= 0 && hr <= 23 {
+            if (x.value - hr as f64).abs() < 0.1 && (0..=23).contains(&hr) {
                 format!("{}", hr)
             } else {
                 "".to_string()

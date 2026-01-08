@@ -19,7 +19,7 @@ pub fn render_daily_kwh(ui: &mut Ui, data: &ElectricData) {
         .collect();
     
     let line = Line::new(points)
-        .color(egui::Color32::from_rgb(31, 119, 180))
+        .color(crate::ui::styles::primary_chart_color())
         .width(2.0)
         .name("Daily kWh");
     
@@ -31,7 +31,7 @@ pub fn render_daily_kwh(ui: &mut Ui, data: &ElectricData) {
         .collect();
     
     let smooth_line = Line::new(smooth_points)
-        .color(egui::Color32::from_rgb(255, 127, 14))
+        .color(crate::ui::styles::average_chart_color())
         .width(2.0)
         .style(egui_plot::LineStyle::Dashed { length: 10.0 })
         .name("7-day average");
