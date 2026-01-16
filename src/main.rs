@@ -1,6 +1,6 @@
 //! PGE Usage Analyzer
-//! 
-//! A GUI application built with eframe/egui to analyze and visualize 
+//!
+//! A GUI application built with eframe/egui to analyze and visualize
 //! PG&E electric and natural gas usage data exported from their customer portal.
 
 mod data;
@@ -21,7 +21,6 @@ struct PgeAnalyzerApp {
     error_message: Option<String>,
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
-    config: Config,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -30,9 +29,9 @@ impl Default for PgeAnalyzerApp {
             eprintln!("Warning: Failed to load config, using defaults: {}", e);
             Config::default()
         });
-        
+
         let data_dir = config.get_data_dir();
-        
+
         Self {
             electric_data: None,
             gas_data: None,
@@ -40,7 +39,6 @@ impl Default for PgeAnalyzerApp {
             error_message: None,
             data_dir,
             heatmap_state: charts::HeatmapState::default(),
-            config,
         }
     }
 }
@@ -48,15 +46,15 @@ impl Default for PgeAnalyzerApp {
 impl PgeAnalyzerApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
         ui::apply_custom_style(&cc.egui_ctx);
-        
+
         let mut app = Self::default();
-        
+
         // Try to auto-load data
         app.auto_load_data();
-        
+
         app
     }
-    
+
     fn auto_load_data(&mut self) {
         // Try to auto-detect electric CSV
         if let Some(electric_path) = data::autodetect_csv(&self.data_dir, "pge_electric") {
@@ -69,7 +67,7 @@ impl PgeAnalyzerApp {
                 }
             }
         }
-        
+
         // Try to auto-detect gas CSV
         if let Some(gas_path) = data::autodetect_csv(&self.data_dir, "pge_natural_gas") {
             match self.load_gas_data(&gas_path) {
@@ -90,26 +88,26 @@ impl PgeAnalyzerApp {
             }
         }
     }
-    
+
     fn load_electric_data(&mut self, path: &Path) -> Result<()> {
         let csv_content = data::read_csv_with_header(path)?;
         self.electric_data = Some(ElectricData::load(&csv_content)?);
         Ok(())
     }
-    
+
     fn load_gas_data(&mut self, path: &Path) -> Result<()> {
         let csv_content = data::read_csv_with_header(path)?;
         self.gas_data = Some(GasData::load(&csv_content)?);
         Ok(())
     }
-    
+
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
         ui.heading("PG&E Usage Analyzer");
         ui.separator();
-        
+
         // File loading buttons
         ui.label(egui::RichText::new("Data Files:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
-        
+
         if ui.button("📂 Load Electric CSV").clicked() {
             if let Some(path) = data::select_csv_file() {
                 match self.load_electric_data(&path) {
@@ -124,7 +122,7 @@ impl PgeAnalyzerApp {
                 self.error_message = Some("ℹ️ No file selected\n\nPlease select a PG&E electric usage CSV file to continue.".to_string());
             }
         }
-        
+
         if ui.button("📂 Load Gas CSV").clicked() {
             if let Some(path) = data::select_csv_file() {
                 match self.load_gas_data(&path) {
@@ -139,9 +137,9 @@ impl PgeAnalyzerApp {
                 self.error_message = Some("ℹ️ No file selected\n\nPlease select a PG&E gas usage CSV file to continue.".to_string());
             }
         }
-        
+
         ui.separator();
-        
+
         // Data status
         ui.label(egui::RichText::new("Status:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
         if self.electric_data.is_some() {
@@ -153,7 +151,7 @@ impl PgeAnalyzerApp {
                 .monospace()
                 .color(ui::styles::status_red()));
         }
-        
+
         if self.gas_data.is_some() {
             ui.label(egui::RichText::new("✔ Gas data loaded")
                 .monospace()
@@ -163,32 +161,22 @@ impl PgeAnalyzerApp {
                 .monospace()
                 .color(ui::styles::status_red()));
         }
-        
+
         ui.separator();
-        
-        // Configuration info
-        ui.label(egui::RichText::new("Config:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
-        ui.label(format!("Data dir: {}", self.data_dir.display()));
-        ui.label(format!("Window: {}x{}", self.config.window.width, self.config.window.height));
-        
-        // Show config file path
-        ui.label(format!("Config: {}", config::get_config_path().display()));
-        
-        ui.separator();
-        
+
         // Chart selection
         ui.label(egui::RichText::new("Charts:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
-        
+
         for view in ChartView::all() {
             let is_selected = self.current_view == view;
-            
+
             // Disable gas chart if no gas data
             let enabled = if view == ChartView::GasDaily {
                 self.gas_data.is_some()
             } else {
                 self.electric_data.is_some()
             };
-            
+
             ui.add_enabled_ui(enabled, |ui| {
                 let mut text = egui::RichText::new(view.name());
                 if is_selected {
@@ -200,14 +188,14 @@ impl PgeAnalyzerApp {
             });
         }
     }
-    
+
     fn render_main_content(&mut self, ui: &mut egui::Ui) {
         // Show error message if any
         if let Some(ref error) = self.error_message {
             ui.colored_label(egui::Color32::RED, error);
             ui.separator();
         }
-        
+
         // Render current chart
         match self.current_view {
             ChartView::DailyKwh => {
@@ -298,7 +286,7 @@ impl eframe::App for PgeAnalyzerApp {
             .show(ctx, |ui| {
                 self.render_sidebar(ui);
             });
-        
+
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::both().show(ui, |ui| {
                 self.render_main_content(ui);
@@ -334,14 +322,14 @@ fn run_app() -> Result<(), eframe::Error> {
         eprintln!("Warning: Failed to load config, using defaults: {}", e);
         Config::default()
     });
-    
+
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([config.window.width, config.window.height])
             .with_title("PG&E Usage Analyzer"),
         ..Default::default()
     };
-    
+
     eframe::run_native(
         "PG&E Usage Analyzer",
         options,
