@@ -94,6 +94,11 @@ cargo run
 .\target\release\pge-analyzer.exe
 ```
 
+## Agent guide and sample data
+
+For assistants and local testing, see `docs/AGENT_GUIDE.md` and the small synthetic samples in `data/samples/`.
+
+
 ### Windows GUI Application
 
 **✅ No Console Window**: The Windows release build is configured as a GUI application, so when you double-click the executable, only the application window opens - no terminal window appears.
@@ -194,16 +199,3 @@ font_scale = 1.0           # Font size multiplier
 ```
 
 If no configuration file exists, the application will create one with default settings.
-
-## Comparison with Python Dashboard
-
-This Rust application provides the same visualizations as `dashboard.html` but with:
-- ✅ Native Windows performance
-- ✅ No browser required
-- ✅ Faster data loading
-- ✅ Lower memory usage
-- ✅ Modern desktop UI
-
-## License
-
-This project matches the functionality of the Python `analysis.py` script.

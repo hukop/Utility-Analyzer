@@ -6,6 +6,7 @@ pub mod daily_heatmap;
 pub mod cost_heatmap;
 pub mod weekday_heatmap;
 pub mod heatmap_base;
+pub mod export_sparklines;
 
 pub use daily_kwh::*;
 pub use weekday_heatmap::*;
@@ -13,6 +14,7 @@ pub use daily_heatmap::*;
 pub use cost_heatmap::*;
 pub use profile::*;
 pub use gas_daily::*;
+pub use export_sparklines::*;
 
 use std::collections::HashSet;
 

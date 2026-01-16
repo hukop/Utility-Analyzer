@@ -15,6 +15,7 @@ use ui::ChartView;
 use config::Config;
 
 struct PgeAnalyzerApp {
+    config: Config,
     electric_data: Option<ElectricData>,
     gas_data: Option<GasData>,
     current_view: ChartView,
@@ -33,6 +34,7 @@ impl Default for PgeAnalyzerApp {
         let data_dir = config.get_data_dir();
 
         Self {
+            config: config.clone(),
             electric_data: None,
             gas_data: None,
             current_view: ChartView::from_str(&config.ui.default_chart),
@@ -56,35 +58,26 @@ impl PgeAnalyzerApp {
     }
 
     fn auto_load_data(&mut self) {
-        // Try to auto-detect electric CSV
-        if let Some(electric_path) = data::autodetect_csv(&self.data_dir, "pge_electric") {
-            match self.load_electric_data(&electric_path) {
-                Ok(_) => {
-                    self.error_message = None;
-                }
-                Err(e) => {
-                    self.error_message = Some(format!("⚠️ Electric Data Error\n\n{}", e));
-                }
+        // 1. Try last used electric CSV from config
+        let electric_path = self.config.last_electric_file.clone()
+            .or_else(|| data::autodetect_csv(&self.data_dir, "pge_electric"));
+
+        if let Some(path) = electric_path {
+            if let Err(e) = self.load_electric_data(&path) {
+                // If it fails, maybe it was deleted or moved, don't show error if it was just an auto-load
+                // but if it was in config, maybe we should clear it?
+                // For now, just log and continue to gas.
+                eprintln!("Failed to auto-load electric data from {:?}: {}", path, e);
             }
         }
 
-        // Try to auto-detect gas CSV
-        if let Some(gas_path) = data::autodetect_csv(&self.data_dir, "pge_natural_gas") {
-            match self.load_gas_data(&gas_path) {
-                Ok(_) => {
-                    if self.error_message.is_none() {
-                        self.error_message = None;
-                    }
-                }
-                Err(e) => {
-                    let msg = format!("⚠️ Gas Data Error\n\n{}", e);
-                    self.error_message = Some(
-                        self.error_message
-                            .as_ref()
-                            .map(|m| format!("{}\n\n{}", m, msg))
-                            .unwrap_or(msg),
-                    );
-                }
+        // 2. Try last used gas CSV from config
+        let gas_path = self.config.last_gas_file.clone()
+            .or_else(|| data::autodetect_csv(&self.data_dir, "pge_natural_gas"));
+
+        if let Some(path) = gas_path {
+            if let Err(e) = self.load_gas_data(&path) {
+                eprintln!("Failed to auto-load gas data from {:?}: {}", path, e);
             }
         }
     }
@@ -92,12 +85,30 @@ impl PgeAnalyzerApp {
     fn load_electric_data(&mut self, path: &Path) -> Result<()> {
         let csv_content = data::read_csv_with_header(path)?;
         self.electric_data = Some(ElectricData::load(&csv_content)?);
+
+        // Save to config
+        self.config.last_electric_file = Some(path.to_path_buf());
+        if let Some(parent) = path.parent() {
+            self.config.default_data_dir = Some(parent.to_path_buf());
+            self.data_dir = parent.to_path_buf();
+        }
+        let _ = self.config.save();
+
         Ok(())
     }
 
     fn load_gas_data(&mut self, path: &Path) -> Result<()> {
         let csv_content = data::read_csv_with_header(path)?;
         self.gas_data = Some(GasData::load(&csv_content)?);
+
+        // Save to config
+        self.config.last_gas_file = Some(path.to_path_buf());
+        if let Some(parent) = path.parent() {
+            self.config.default_data_dir = Some(parent.to_path_buf());
+            self.data_dir = parent.to_path_buf();
+        }
+        let _ = self.config.save();
+
         Ok(())
     }
 
@@ -184,6 +195,8 @@ impl PgeAnalyzerApp {
                 }
                 if ui.selectable_label(is_selected, text).clicked() {
                     self.current_view = view;
+                    self.config.ui.default_chart = view.to_string();
+                    let _ = self.config.save();
                 }
             });
         }
@@ -235,6 +248,13 @@ impl PgeAnalyzerApp {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
             }
+            ChartView::ExportSparklines => {
+                if let Some(ref data) = self.electric_data {
+                    charts::render_export_sparklines(ui, data, &mut self.heatmap_state);
+                } else {
+                    ui.label("No electric data loaded. Please load a CSV file.");
+                }
+            }
             ChartView::GasDaily => {
                 if let Some(ref data) = self.gas_data {
                     ui.heading("Gas: Daily Usage (USD)");
@@ -260,6 +280,8 @@ impl PgeAnalyzerApp {
                 if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
                     let new_pos = if pos == 0 { all_views.len() - 1 } else { pos - 1 };
                     self.current_view = all_views[new_pos];
+                    self.config.ui.default_chart = self.current_view.to_string();
+                    let _ = self.config.save();
                 }
             }
             if i.key_pressed(egui::Key::ArrowDown) {
@@ -267,6 +289,8 @@ impl PgeAnalyzerApp {
                 if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
                     let new_pos = (pos + 1) % all_views.len();
                     self.current_view = all_views[new_pos];
+                    self.config.ui.default_chart = self.current_view.to_string();
+                    let _ = self.config.save();
                 }
             }
             if i.key_pressed(egui::Key::Escape) {

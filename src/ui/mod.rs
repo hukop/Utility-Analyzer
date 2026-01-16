@@ -9,6 +9,7 @@ pub enum ChartView {
     DailyHeatmap,
     CostHeatmap,
     HourlyProfile,
+    ExportSparklines,
     GasDaily,
 }
 
@@ -20,10 +21,11 @@ impl ChartView {
             Self::DailyHeatmap,
             Self::CostHeatmap,
             Self::HourlyProfile,
+            Self::ExportSparklines,
             Self::GasDaily,
         ]
     }
-    
+
     pub fn name(&self) -> &str {
         match self {
             Self::DailyKwh => "Daily kWh",
@@ -31,18 +33,32 @@ impl ChartView {
             Self::DailyHeatmap => "Daily by-hour kWh Heatmap",
             Self::CostHeatmap => "Daily by-hour Cost Heatmap",
             Self::HourlyProfile => "Average Daily Profile",
+            Self::ExportSparklines => "Export Sparklines (6-18h)",
             Self::GasDaily => "Gas: Daily Usage (USD)",
         }
     }
-    
+
     pub fn from_str(s: &str) -> Self {
         match s {
             "WeekdayHeatmap" => Self::WeekdayHeatmap,
             "DailyHeatmap" => Self::DailyHeatmap,
             "CostHeatmap" => Self::CostHeatmap,
             "HourlyProfile" => Self::HourlyProfile,
+            "ExportSparklines" => Self::ExportSparklines,
             "GasDaily" => Self::GasDaily,
             _ => Self::DailyKwh, // Default fallback
         }
+    }
+
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::DailyKwh => "DailyKwh",
+            Self::WeekdayHeatmap => "WeekdayHeatmap",
+            Self::DailyHeatmap => "DailyHeatmap",
+            Self::CostHeatmap => "CostHeatmap",
+            Self::HourlyProfile => "HourlyProfile",
+            Self::ExportSparklines => "ExportSparklines",
+            Self::GasDaily => "GasDaily",
+        }.to_string()
     }
 }
