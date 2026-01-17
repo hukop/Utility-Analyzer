@@ -3,29 +3,29 @@ use egui::{Context, Style, Visuals};
 pub fn apply_custom_style(ctx: &Context) {
     let mut style = Style::default();
     let mut visuals = Visuals::light();
-    
+
     // Windows 11-inspired colors
     visuals.window_fill = window_bg();
     visuals.panel_fill = panel_bg();
     visuals.extreme_bg_color = egui::Color32::WHITE;
-    
+
     // Accent color
     visuals.selection.bg_fill = theme_accent();
     visuals.selection.stroke.color = theme_accent();
-    
+
     // Widget colors
     visuals.widgets.noninteractive.bg_fill = widget_bg();
     visuals.widgets.inactive.bg_fill = widget_inactive();
     visuals.widgets.hovered.bg_fill = widget_hovered();
     visuals.widgets.active.bg_fill = theme_accent();
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
-    
+
     // Rounded corners
     visuals.widgets.noninteractive.rounding = egui::Rounding::same(4.0);
     visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
     visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
     visuals.widgets.active.rounding = egui::Rounding::same(4.0);
-    
+
     style.visuals = visuals;
     ctx.set_style(style);
 }
@@ -37,7 +37,9 @@ pub const SIDEBAR_SECTION_SIZE: f32 = 15.0;
 pub const MONTH_LABEL_OFFSET: f32 = 10.0;
 pub const MONTH_TOGGLE_OFFSET: f32 = 75.0;
 pub const MONTH_HEADER_HEIGHT: f32 = 25.0;
+pub const YEAR_HEADER_HEIGHT: f32 = 30.0;
 pub const MONTH_HEADER_FONT_SIZE: f32 = 14.0;
+pub const YEAR_HEADER_FONT_SIZE: f32 = 16.0;
 pub const MONTH_SUMMARY_FONT_SIZE: f32 = 12.0;
 pub const BODY_FONT_SIZE: f32 = 12.0;
 pub const AXIS_FONT_SIZE: f32 = 12.0;

@@ -29,4 +29,6 @@ pub struct HeatmapState {
     pub is_dragging: bool,
     /// Set of month keys (YYYY-MM) that are currently collapsed.
     pub collapsed_months: HashSet<String>,
+    /// Set of year keys (YYYY) that are currently collapsed.
+    pub collapsed_years: HashSet<String>,
 }

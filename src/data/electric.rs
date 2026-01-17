@@ -27,6 +27,12 @@ pub struct ElectricData {
     pub monthly_cost_sums: HashMap<String, f64>,
     /// Pre-calculated sums of export (kWh) per month (YYYY-MM).
     pub monthly_export_sums: HashMap<String, f64>,
+    /// Pre-calculated sums of usage (kWh) per year (YYYY).
+    pub yearly_kwh_sums: HashMap<String, f64>,
+    /// Pre-calculated sums of cost ($) per year (YYYY).
+    pub yearly_cost_sums: HashMap<String, f64>,
+    /// Pre-calculated sums of export (kWh) per year (YYYY).
+    pub yearly_export_sums: HashMap<String, f64>,
 }
 
 impl ElectricData {
@@ -59,6 +65,9 @@ impl ElectricData {
         let mut monthly_kwh_sums = HashMap::new();
         let mut monthly_cost_sums = HashMap::new();
         let mut monthly_export_sums = HashMap::new();
+        let mut yearly_kwh_sums = HashMap::new();
+        let mut yearly_cost_sums = HashMap::new();
+        let mut yearly_export_sums = HashMap::new();
 
         for result in reader.records() {
             let record = result?;
@@ -101,11 +110,17 @@ impl ElectricData {
                 0.0
             };
 
-            // Update monthly sums
+            // Update monthly and yearly sums
             let month_key = dt.format("%Y-%m").to_string();
+            let year_key = dt.format("%Y").to_string();
+
             *monthly_kwh_sums.entry(month_key.clone()).or_insert(0.0) += kwh;
             *monthly_cost_sums.entry(month_key.clone()).or_insert(0.0) += cost;
             *monthly_export_sums.entry(month_key).or_insert(0.0) += export_kwh;
+
+            *yearly_kwh_sums.entry(year_key.clone()).or_insert(0.0) += kwh;
+            *yearly_cost_sums.entry(year_key.clone()).or_insert(0.0) += cost;
+            *yearly_export_sums.entry(year_key).or_insert(0.0) += export_kwh;
 
             data.push(ElectricDataPoint {
                 timestamp,
@@ -118,7 +133,15 @@ impl ElectricData {
         // Sort data by timestamp
         data.sort_by_key(|p| p.timestamp);
 
-        Ok(Self { data, monthly_kwh_sums, monthly_cost_sums, monthly_export_sums })
+        Ok(Self {
+            data,
+            monthly_kwh_sums,
+            monthly_cost_sums,
+            monthly_export_sums,
+            yearly_kwh_sums,
+            yearly_cost_sums,
+            yearly_export_sums,
+        })
     }
 
     /// Get daily totals

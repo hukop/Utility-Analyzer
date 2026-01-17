@@ -30,9 +30,74 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
 
     egui::ScrollArea::both().show(ui, |ui| {
         let mut last_month = String::new();
+        let mut last_year = String::new();
 
         for (day_idx, date_str) in dates.iter().enumerate() {
+            let year = &date_str[0..4];
             let month = &date_str[0..7];
+
+            // Year header
+            if year != last_year {
+                let header_rect = ui.allocate_exact_size(
+                    egui::vec2(date_label_width + sparkline_width + sum_label_width, crate::ui::styles::YEAR_HEADER_HEIGHT),
+                    egui::Sense::click(),
+                ).0;
+
+                let is_collapsed = state.collapsed_years.contains(year);
+                let response = ui.interact(header_rect, ui.id().with(format!("export_year_{}", year)), egui::Sense::click());
+
+                if response.clicked() {
+                    if is_collapsed {
+                        state.collapsed_years.remove(year);
+                    } else {
+                        state.collapsed_years.insert(year.to_string());
+                    }
+                }
+
+                let bg_color = if response.hovered() {
+                    if ui.visuals().dark_mode { egui::Color32::from_gray(80) } else { egui::Color32::from_gray(190) }
+                } else if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) };
+
+                ui.painter().rect_filled(header_rect, 0.0, bg_color);
+                ui.painter().line_segment(
+                    [header_rect.left_bottom(), header_rect.right_bottom()],
+                    egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
+                );
+
+                let icon = if is_collapsed { "⏵" } else { "⏷" };
+                ui.painter().text(
+                    header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_TOGGLE_OFFSET, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    icon,
+                    egui::FontId::monospace(crate::ui::styles::YEAR_HEADER_FONT_SIZE),
+                    ui.visuals().text_color()
+                );
+
+                ui.painter().text(
+                    header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
+                    egui::Align2::LEFT_CENTER,
+                    year,
+                    egui::FontId::proportional(crate::ui::styles::YEAR_HEADER_FONT_SIZE),
+                    ui.visuals().text_color()
+                );
+
+                // Yearly sum on the right
+                let yearly_sum = data.yearly_export_sums.get(year).cloned().unwrap_or(0.0);
+                ui.painter().text(
+                    header_rect.right_center() + egui::vec2(-crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
+                    egui::Align2::RIGHT_CENTER,
+                    format!("Year Total: {:.1} kWh", yearly_sum),
+                    egui::FontId::proportional(crate::ui::styles::YEAR_HEADER_FONT_SIZE - 2.0),
+                    ui.visuals().text_color()
+                );
+
+                last_year = year.to_string();
+                last_month = String::new(); // Reset month to show first month of year
+            }
+
+            if state.collapsed_years.contains(year) {
+                continue;
+            }
 
             // Month header
             if month != last_month {

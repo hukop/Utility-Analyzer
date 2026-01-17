@@ -12,6 +12,8 @@ pub struct HeatmapConfig<'a> {
     pub y_label_width: f32,
     pub cell_height: f32,
     pub monthly_sums: &'a std::collections::HashMap<String, f64>,
+    pub yearly_sums: &'a std::collections::HashMap<String, f64>,
+    pub daily_sum_width: f32,
 }
 
 pub fn render_heatmap_component(
@@ -25,7 +27,7 @@ pub fn render_heatmap_component(
         ui.label("No data available");
         return;
     }
-    
+
     // Find min/max for color scaling
     let mut max_val = f64::MIN;
     for day_data in heatmap_data {
@@ -33,24 +35,24 @@ pub fn render_heatmap_component(
             max_val = max_val.max(val);
         }
     }
-    
+
     ui.heading(&config.title);
-    
+
     let cell_width = 35.0;
     let cell_height = config.cell_height;
-    
+
     // Calculate selection sum if active
     let mut selection_sum = 0.0;
     let mut selection_count = 0;
     let mut show_selection_info = false;
     let mut selection_rect = Option::<egui::Rect>::None;
-    
+
     let mut selected_indices = None;
     if let (Some((start_day, start_hour)), Some((end_day, end_hour))) = (state.selection_start, state.selection_end) {
         let (min_day, max_day) = (start_day.min(end_day), start_day.max(end_day));
         let (min_hour, max_hour) = (start_hour.min(end_hour), start_hour.max(end_hour));
         selected_indices = Some(((min_day, max_day), (min_hour, max_hour)));
-        
+
         for d in min_day..=max_day {
             if d < heatmap_data.len() {
                 for h in min_hour..=max_hour {
@@ -66,7 +68,7 @@ pub fn render_heatmap_component(
 
     ui.label(&config.selection_label);
     ui.add_space(crate::ui::styles::CHART_SPACING);
-    
+
     egui::ScrollArea::both().show(ui, |ui| {
         let content_start_pos = ui.cursor().left_top();
 
@@ -75,20 +77,76 @@ pub fn render_heatmap_component(
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                 ui.add_space(20.0); // Header offset
-                
+
                 let mut last_month = String::new();
+                let mut last_year = String::new();
                 for label in dates.iter() {
+                    let year = if config.show_weekend_emphasis { &label[0..4] } else { "" };
                     let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
-                    
+
+                    // Year Header
+                    if config.show_weekend_emphasis && year != last_year {
+                        let header_rect = ui.allocate_exact_size(
+                            egui::vec2(config.y_label_width, crate::ui::styles::YEAR_HEADER_HEIGHT),
+                            egui::Sense::click(),
+                        ).0;
+
+                        let is_collapsed = state.collapsed_years.contains(year);
+                        let response = ui.interact(header_rect, ui.id().with(format!("{}_year_left", year)), egui::Sense::click());
+
+                        if response.clicked() {
+                            if is_collapsed {
+                                state.collapsed_years.remove(year);
+                            } else {
+                                state.collapsed_years.insert(year.to_string());
+                            }
+                        }
+
+                        let bg_color = if response.hovered() {
+                            if ui.visuals().dark_mode { egui::Color32::from_gray(80) } else { egui::Color32::from_gray(190) }
+                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) };
+
+                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
+                        ui.painter().line_segment(
+                            [header_rect.left_bottom(), header_rect.right_bottom()],
+                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
+                        );
+
+                        ui.painter().text(
+                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            year,
+                            egui::FontId::proportional(crate::ui::styles::YEAR_HEADER_FONT_SIZE),
+                            ui.visuals().text_color()
+                        );
+
+                        let icon = if is_collapsed { "⏵" } else { "⏷" };
+                        ui.painter().text(
+                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_TOGGLE_OFFSET, 0.0),
+                            egui::Align2::LEFT_CENTER,
+                            icon,
+                            egui::FontId::monospace(crate::ui::styles::YEAR_HEADER_FONT_SIZE),
+                            ui.visuals().text_color()
+                        );
+
+                        last_year = year.to_string();
+                        // Reset last_month so first month of new year gets header
+                        last_month = String::new();
+                    }
+
+                    if config.show_weekend_emphasis && state.collapsed_years.contains(year) {
+                        continue;
+                    }
+
                     if config.show_weekend_emphasis && month != last_month {
                         let header_rect = ui.allocate_exact_size(
                             egui::vec2(config.y_label_width, crate::ui::styles::MONTH_HEADER_HEIGHT),
                             egui::Sense::click(),
                         ).0;
-                        
+
                         let is_collapsed = state.collapsed_months.contains(month);
                         let response = ui.interact(header_rect, ui.id().with(format!("{}_left", month)), egui::Sense::click());
-                        
+
                         if response.clicked() {
                             if is_collapsed {
                                 state.collapsed_months.remove(month);
@@ -100,13 +158,13 @@ pub fn render_heatmap_component(
                         let bg_color = if response.hovered() {
                             if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
                         } else if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) };
-                        
+
                         ui.painter().rect_filled(header_rect, 0.0, bg_color);
                         ui.painter().line_segment(
-                            [header_rect.left_bottom(), header_rect.right_bottom()], 
+                            [header_rect.left_bottom(), header_rect.right_bottom()],
                             egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
                         );
-                        
+
                         ui.painter().text(
                             header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
                             egui::Align2::LEFT_CENTER,
@@ -114,7 +172,7 @@ pub fn render_heatmap_component(
                             egui::FontId::proportional(crate::ui::styles::MONTH_HEADER_FONT_SIZE),
                             ui.visuals().text_color()
                         );
-                        
+
                         let icon = if is_collapsed { "⏵" } else { "⏷" };
                         ui.painter().text(
                             header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_TOGGLE_OFFSET, 0.0),
@@ -123,7 +181,7 @@ pub fn render_heatmap_component(
                             egui::FontId::monospace(crate::ui::styles::MONTH_HEADER_FONT_SIZE),
                             ui.visuals().text_color()
                         );
-                        
+
                         last_month = month.to_string();
                     }
 
@@ -135,7 +193,7 @@ pub fn render_heatmap_component(
                         egui::vec2(config.y_label_width, cell_height),
                         egui::Sense::hover(),
                     );
-                    
+
                     let date_parsed = chrono::NaiveDate::parse_from_str(label, "%Y-%m-%d").ok();
                     let is_weekend = if config.show_weekend_emphasis {
                         if let Some(d) = date_parsed {
@@ -146,18 +204,18 @@ pub fn render_heatmap_component(
                     } else {
                         false
                     };
-                    
+
                     let label_text = if let Some(d) = date_parsed {
                         format!("{}", d.format("%Y-%m-%d %a"))
                     } else {
                         label.clone()
                     };
-                    
+
                     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
                         if is_weekend {
                             ui.painter().rect_filled(rect, 0.0, crate::ui::styles::weekend_bg());
                         }
-                        
+
                         let mut text = egui::RichText::new(label_text);
                         if is_weekend {
                             text = text.size(crate::ui::styles::MONTH_HEADER_FONT_SIZE - 1.0)
@@ -167,7 +225,7 @@ pub fn render_heatmap_component(
                             text = text.size(crate::ui::styles::BODY_FONT_SIZE)
                                 .color(ui.visuals().text_color());
                         }
-                        
+
                         if config.show_weekend_emphasis {
                             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
                                 ui.add_space(5.0);
@@ -181,7 +239,7 @@ pub fn render_heatmap_component(
                     });
                 }
             });
-            
+
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
                 // X-axis labels
@@ -193,12 +251,12 @@ pub fn render_heatmap_component(
                         } else {
                             String::new()
                         };
-                        
+
                         let (rect, _) = ui.allocate_exact_size(
                             egui::vec2(cell_width, 20.0),
                             egui::Sense::hover(),
                         );
-                        
+
                         if !label.is_empty() {
                             ui.painter().text(
                                 rect.center(),
@@ -210,19 +268,71 @@ pub fn render_heatmap_component(
                         }
                     }
                 });
-                
+
                 // Heatmap cells
                 let mut last_month = String::new();
+                let mut last_year = String::new();
                 for (day_idx, day_data) in heatmap_data.iter().enumerate() {
                     let label = &dates[day_idx];
+                    let year = if config.show_weekend_emphasis { &label[0..4] } else { "" };
                     let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
+
+                    // Year Header
+                    if config.show_weekend_emphasis && year != last_year {
+                        let header_rect = ui.allocate_exact_size(
+                            egui::vec2(24.0 * cell_width, crate::ui::styles::YEAR_HEADER_HEIGHT),
+                            egui::Sense::click(),
+                        ).0;
+
+                        let response = ui.interact(header_rect, ui.id().with(format!("{}_year_right", year)), egui::Sense::click());
+                        if response.clicked() {
+                            if state.collapsed_years.contains(year) {
+                                state.collapsed_years.remove(year);
+                            } else {
+                                state.collapsed_years.insert(year.to_string());
+                            }
+                        }
+
+                        let bg_color = if response.hovered() {
+                            if ui.visuals().dark_mode { egui::Color32::from_gray(80) } else { egui::Color32::from_gray(190) }
+                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) };
+
+                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
+                        ui.painter().line_segment(
+                            [header_rect.left_bottom(), header_rect.right_bottom()],
+                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
+                        );
+
+                        let sum = config.yearly_sums.get(year).cloned().unwrap_or(0.0);
+                        let val_text = if config.unit == "$" {
+                            format!("Year Total: ${:.2}", sum)
+                        } else {
+                            format!("Year Total: {:.1} {}", sum, config.unit)
+                        };
+
+                        ui.painter().text(
+                            header_rect.right_center() + egui::vec2(-crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
+                            egui::Align2::RIGHT_CENTER,
+                            val_text,
+                            egui::FontId::proportional(crate::ui::styles::YEAR_HEADER_FONT_SIZE - 2.0),
+                            ui.visuals().text_color()
+                        );
+
+                        last_year = year.to_string();
+                        // Reset last_month so first month of new year gets header
+                        last_month = String::new();
+                    }
+
+                    if config.show_weekend_emphasis && state.collapsed_years.contains(year) {
+                        continue;
+                    }
 
                     if config.show_weekend_emphasis && month != last_month {
                         let header_rect = ui.allocate_exact_size(
                             egui::vec2(24.0 * cell_width, crate::ui::styles::MONTH_HEADER_HEIGHT),
                             egui::Sense::click(),
                         ).0;
-                        
+
                         let response = ui.interact(header_rect, ui.id().with(format!("{}_right", month)), egui::Sense::click());
                         if response.clicked() {
                             if state.collapsed_months.contains(month) {
@@ -235,13 +345,13 @@ pub fn render_heatmap_component(
                         let bg_color = if response.hovered() {
                             if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
                         } else if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) };
-                        
+
                         ui.painter().rect_filled(header_rect, 0.0, bg_color);
                         ui.painter().line_segment(
-                            [header_rect.left_bottom(), header_rect.right_bottom()], 
+                            [header_rect.left_bottom(), header_rect.right_bottom()],
                             egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
                         );
-                        
+
                         let sum = config.monthly_sums.get(month).cloned().unwrap_or(0.0);
                         let val_text = if config.unit == "$" {
                             format!("Total: ${:.2}", sum)
@@ -256,7 +366,7 @@ pub fn render_heatmap_component(
                             egui::FontId::proportional(crate::ui::styles::MONTH_SUMMARY_FONT_SIZE),
                             ui.visuals().text_color()
                         );
-                        
+
                         last_month = month.to_string();
                     }
 
@@ -269,18 +379,18 @@ pub fn render_heatmap_component(
                     } else {
                         None
                     };
-                    
+
                     ui.horizontal(|ui| {
                         ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-                        
+
                         for (hour, &val) in day_data.iter().enumerate() {
                             let color = get_viridis_color(val, 0.0, max_val);
-                            
+
                             let (rect, response) = ui.allocate_exact_size(
                                 egui::vec2(cell_width, cell_height),
                                 egui::Sense::drag(),
                             );
-                            
+
                             if response.drag_started() {
                                 state.selection_start = Some((day_idx, hour));
                                 state.selection_end = Some((day_idx, hour));
@@ -288,7 +398,7 @@ pub fn render_heatmap_component(
                             } else if response.drag_stopped() {
                                 state.is_dragging = false;
                             }
-                            
+
                             if state.is_dragging {
                                 if let Some(pointer_pos) = ui.input(|i| i.pointer.hover_pos()) {
                                     if rect.contains(pointer_pos) {
@@ -296,7 +406,7 @@ pub fn render_heatmap_component(
                                     }
                                 }
                             }
-                            
+
                             if let Some(((min_d, max_d), (min_h, max_h))) = selected_indices {
                                 if day_idx >= min_d && day_idx <= max_d && hour >= min_h && hour <= max_h {
                                     selection_rect = Some(selection_rect.map_or(rect, |r| r.union(rect)));
@@ -304,7 +414,7 @@ pub fn render_heatmap_component(
                             }
 
                             ui.painter().rect_filled(rect, 0.0, color);
-                            
+
                             if response.hovered() {
                                 response.on_hover_ui(|ui| {
                                     let date_label = if let Some(d) = date_parsed {
@@ -324,6 +434,31 @@ pub fn render_heatmap_component(
                                 });
                             }
                         }
+
+                        // Daily sum column
+                        if config.daily_sum_width > 0.0 {
+                            let daily_sum: f64 = day_data.iter().sum();
+                            let (sum_rect, _) = ui.allocate_exact_size(
+                                egui::vec2(config.daily_sum_width, cell_height),
+                                egui::Sense::hover(),
+                            );
+
+                            let sum_text = if config.unit == "$" {
+                                format!("${:.2}", daily_sum)
+                            } else {
+                                format!("{:.1} {}", daily_sum, config.unit)
+                            };
+
+                            let sum_color = egui::Color32::from_rgb(100, 200, 100);
+
+                            ui.painter().text(
+                                sum_rect.right_center() + egui::vec2(-5.0, 0.0),
+                                egui::Align2::RIGHT_CENTER,
+                                sum_text,
+                                egui::FontId::proportional(crate::ui::styles::BODY_FONT_SIZE),
+                                sum_color
+                            );
+                        }
                     });
                 }
 
@@ -335,13 +470,25 @@ pub fn render_heatmap_component(
                 let stroke = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(120));
                 let total_width = config.y_label_width + (24.0 * cell_width);
                 let mut current_y = 20.0; // Starting offset for header
-                
+
                 let mut last_month = String::new();
+                let mut last_year = String::new();
                 for label in dates.iter() {
+                    let year = if config.show_weekend_emphasis { &label[0..4] } else { "" };
                     let month = if config.show_weekend_emphasis { &label[0..7] } else { "" };
-                    
+
+                    if config.show_weekend_emphasis && year != last_year {
+                        current_y += crate::ui::styles::YEAR_HEADER_HEIGHT;
+                        last_year = year.to_string();
+                        last_month = String::new();
+                    }
+
+                    if config.show_weekend_emphasis && state.collapsed_years.contains(year) {
+                        continue;
+                    }
+
                     if config.show_weekend_emphasis && month != last_month {
-                        current_y += 25.0; // Account for month header
+                        current_y += crate::ui::styles::MONTH_HEADER_HEIGHT;
                         last_month = month.to_string();
                     }
 
@@ -357,17 +504,17 @@ pub fn render_heatmap_component(
                     };
 
                     let x_start = content_start_pos.x;
-                    
+
                     if is_sat {
                         let y = content_start_pos.y + current_y;
                         ui.painter().line_segment([egui::pos2(x_start, y), egui::pos2(x_start + total_width, y)], stroke);
                     }
-                    
+
                     if is_sun {
                         let y = content_start_pos.y + current_y + cell_height;
                         ui.painter().line_segment([egui::pos2(x_start, y), egui::pos2(x_start + total_width, y)], stroke);
                     }
-                    
+
                     current_y += cell_height;
                 }
             });
@@ -412,6 +559,6 @@ pub fn render_heatmap_component(
     if ui.input(|i| i.pointer.button_pressed(egui::PointerButton::Primary)) && !ui.ctx().is_using_pointer() {
         state.selection_start = None;
         state.selection_end = None;
-        state.is_dragging = false; 
+        state.is_dragging = false;
     }
 }
