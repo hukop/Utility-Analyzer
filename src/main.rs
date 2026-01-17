@@ -129,8 +129,8 @@ impl PgeAnalyzerApp {
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
-        ui.heading("PG&E Usage Analyzer");
-        ui.separator();
+        //ui.heading("PG&E Usage Analyzer");
+        //ui.separator();
 
         // File loading buttons
         ui.label(egui::RichText::new("Data Files:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
@@ -338,6 +338,10 @@ impl eframe::App for PgeAnalyzerApp {
 
         self.handle_input(ctx);
 
+        egui::TopBottomPanel::top("title_bar").show(ctx, |ui| {
+            ui::components::render_title_bar(ui, "PG&E Usage Analyzer");
+        });
+
         egui::SidePanel::left("sidebar")
             .min_width(200.0)
             .show(ctx, |ui| {
@@ -383,7 +387,8 @@ fn run_app() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([config.window.width, config.window.height])
-            .with_title("PG&E Usage Analyzer"),
+            .with_title("PG&E Usage Analyzer")
+            .with_decorations(false),
         ..Default::default()
     };
 
