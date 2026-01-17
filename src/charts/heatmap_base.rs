@@ -213,14 +213,14 @@ pub fn render_heatmap_component(
 
                     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
                         if is_weekend {
-                            ui.painter().rect_filled(rect, 0.0, crate::ui::styles::weekend_bg());
+                            ui.painter().rect_filled(rect, 0.0, crate::ui::styles::weekend_bg(ui.visuals().dark_mode));
                         }
 
                         let mut text = egui::RichText::new(label_text);
                         if is_weekend {
                             text = text.size(crate::ui::styles::MONTH_HEADER_FONT_SIZE - 1.0)
                                 .strong()
-                                .color(crate::ui::styles::weekend_text());
+                                .color(crate::ui::styles::weekend_text(ui.visuals().dark_mode));
                         } else {
                             text = text.size(crate::ui::styles::BODY_FONT_SIZE)
                                 .color(ui.visuals().text_color());

@@ -189,11 +189,11 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                 );
 
                 if is_weekend {
-                    ui.painter().rect_filled(label_rect, 0.0, crate::ui::styles::weekend_bg());
+                    ui.painter().rect_filled(label_rect, 0.0, crate::ui::styles::weekend_bg(ui.visuals().dark_mode));
                 }
 
                 let text_color = if is_weekend {
-                    crate::ui::styles::weekend_text()
+                    crate::ui::styles::weekend_text(ui.visuals().dark_mode)
                 } else {
                     ui.visuals().text_color()
                 };

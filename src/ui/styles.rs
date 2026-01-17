@@ -1,26 +1,42 @@
 use egui::{Context, Style, Visuals};
 
-pub fn apply_custom_style(ctx: &Context) {
+pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
     let mut style = Style::default();
-    let mut visuals = Visuals::light();
 
-    // Windows 11-inspired colors
-    visuals.window_fill = window_bg();
-    visuals.panel_fill = panel_bg();
-    visuals.extreme_bg_color = egui::Color32::WHITE;
+    // Choose visuals based on preference or system settings
+    let mut visuals = if let Some(dark) = dark_mode_pref {
+        if dark { Visuals::dark() } else { Visuals::light() }
+    } else {
+        Visuals::light() // Default to light if no preference
+    };
 
-    // Accent color
+    // Apply themed colors
+    if visuals.dark_mode {
+        // Windows 11-inspired dark theme
+        visuals.window_fill = egui::Color32::from_rgb(32, 32, 32);
+        visuals.panel_fill = egui::Color32::from_rgb(28, 28, 28);
+        visuals.extreme_bg_color = egui::Color32::from_rgb(24, 24, 24);
+        visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(45, 45, 45);
+        visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(50, 50, 50);
+        visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(60, 60, 60);
+        visuals.widgets.active.bg_fill = theme_accent();
+    } else {
+        // Windows 11-inspired light theme
+        visuals.window_fill = window_bg();
+        visuals.panel_fill = panel_bg();
+        visuals.extreme_bg_color = egui::Color32::WHITE;
+        visuals.widgets.noninteractive.bg_fill = widget_bg();
+        visuals.widgets.inactive.bg_fill = widget_inactive();
+        visuals.widgets.hovered.bg_fill = widget_hovered();
+        visuals.widgets.active.bg_fill = theme_accent();
+    };
+
+    // Core accent color
     visuals.selection.bg_fill = theme_accent();
     visuals.selection.stroke.color = theme_accent();
-
-    // Widget colors
-    visuals.widgets.noninteractive.bg_fill = widget_bg();
-    visuals.widgets.inactive.bg_fill = widget_inactive();
-    visuals.widgets.hovered.bg_fill = widget_hovered();
-    visuals.widgets.active.bg_fill = theme_accent();
     visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
 
-    // Rounded corners
+    // Rounded corners (modern feel)
     visuals.widgets.noninteractive.rounding = egui::Rounding::same(4.0);
     visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
     visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
@@ -53,6 +69,7 @@ pub fn average_chart_color() -> egui::Color32 {
     egui::Color32::from_rgb(255, 127, 14)
 }
 
+
 // Core Theme Colors
 pub fn window_bg() -> egui::Color32 {
     egui::Color32::from_rgb(243, 243, 243)
@@ -78,12 +95,20 @@ pub fn widget_hovered() -> egui::Color32 {
     egui::Color32::from_rgb(229, 229, 229)
 }
 
-pub fn weekend_bg() -> egui::Color32 {
-    egui::Color32::from_rgba_unmultiplied(0, 120, 212, 15)
+pub fn weekend_bg(dark_mode: bool) -> egui::Color32 {
+    if dark_mode {
+        egui::Color32::from_rgba_unmultiplied(0, 120, 212, 30) // Slightly more prominent in dark mode
+    } else {
+        egui::Color32::from_rgba_unmultiplied(0, 120, 212, 15)
+    }
 }
 
-pub fn weekend_text() -> egui::Color32 {
-    egui::Color32::from_rgb(0, 100, 200)
+pub fn weekend_text(dark_mode: bool) -> egui::Color32 {
+    if dark_mode {
+        egui::Color32::from_rgb(100, 180, 255)
+    } else {
+        egui::Color32::from_rgb(0, 100, 200)
+    }
 }
 
 pub fn status_green() -> egui::Color32 {

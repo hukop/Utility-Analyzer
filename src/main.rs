@@ -47,9 +47,22 @@ impl Default for PgeAnalyzerApp {
 
 impl PgeAnalyzerApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        ui::apply_custom_style(&cc.egui_ctx);
+        let config = Config::load().unwrap_or_else(|e| {
+            eprintln!("Warning: Failed to load config, using defaults: {}", e);
+            Config::default()
+        });
 
-        let mut app = Self::default();
+        ui::apply_custom_style(&cc.egui_ctx, config.ui.dark_mode);
+
+        let mut app = Self {
+            config: config.clone(),
+            electric_data: None,
+            gas_data: None,
+            current_view: ChartView::from_str(&config.ui.default_chart),
+            error_message: None,
+            data_dir: config.get_data_dir(),
+            heatmap_state: charts::HeatmapState::default(),
+        };
 
         // Try to auto-load data
         app.auto_load_data();
@@ -199,6 +212,18 @@ impl PgeAnalyzerApp {
                     let _ = self.config.save();
                 }
             });
+        }
+
+        ui.separator();
+
+        // Theme Toggle
+        ui.label(egui::RichText::new("Appearance:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
+
+        let mut dark_mode = self.config.ui.dark_mode.unwrap_or(false);
+        if ui.checkbox(&mut dark_mode, "🌙 Dark Mode").changed() {
+            self.config.ui.dark_mode = Some(dark_mode);
+            let _ = self.config.save();
+            ui::apply_custom_style(ui.ctx(), Some(dark_mode));
         }
     }
 
