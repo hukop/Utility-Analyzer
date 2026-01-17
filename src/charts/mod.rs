@@ -32,3 +32,33 @@ pub struct HeatmapState {
     /// Set of year keys (YYYY) that are currently collapsed.
     pub collapsed_years: HashSet<String>,
 }
+
+/// Calculates a moving average over a sliding window.
+///
+/// # Arguments
+/// * `data` - Vector of (Timestamp, Value) tuples.
+/// * `window` - Size of the sliding window.
+pub fn calculate_rolling_average(
+    data: &[(chrono::DateTime<chrono::Utc>, f64)],
+    window: usize,
+) -> Vec<(chrono::DateTime<chrono::Utc>, f64)> {
+    if data.len() < window {
+        return data.to_vec();
+    }
+
+    let mut result = Vec::new();
+    let half_window = window / 2;
+
+    for i in 0..data.len() {
+        let start = i.saturating_sub(half_window);
+        let end = (i + half_window + 1).min(data.len());
+
+        let sum: f64 = data[start..end].iter().map(|(_, v)| v).sum();
+        let count = (end - start) as f64;
+        let avg = sum / count;
+
+        result.push((data[i].0, avg));
+    }
+
+    result
+}

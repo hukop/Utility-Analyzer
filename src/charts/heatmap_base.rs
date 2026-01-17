@@ -86,48 +86,26 @@ pub fn render_heatmap_component(
 
                     // Year Header
                     if config.show_weekend_emphasis && year != last_year {
-                        let header_rect = ui.allocate_exact_size(
-                            egui::vec2(config.y_label_width, crate::ui::styles::YEAR_HEADER_HEIGHT),
-                            egui::Sense::click(),
-                        ).0;
-
                         let is_collapsed = state.collapsed_years.contains(year);
-                        let response = ui.interact(header_rect, ui.id().with(format!("{}_year_left", year)), egui::Sense::click());
-
-                        if response.clicked() {
+                        if crate::ui::components::render_collapsible_header(
+                            ui,
+                            format!("{}_year_left", year),
+                            crate::ui::components::HeaderConfig {
+                                label: year,
+                                width: config.y_label_width,
+                                height: crate::ui::styles::YEAR_HEADER_HEIGHT,
+                                font_size: crate::ui::styles::YEAR_HEADER_FONT_SIZE,
+                                is_collapsed,
+                                summary: None,
+                                show_icon: true,
+                            },
+                        ) {
                             if is_collapsed {
                                 state.collapsed_years.remove(year);
                             } else {
                                 state.collapsed_years.insert(year.to_string());
                             }
                         }
-
-                        let bg_color = if response.hovered() {
-                            if ui.visuals().dark_mode { egui::Color32::from_gray(80) } else { egui::Color32::from_gray(190) }
-                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) };
-
-                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
-                        ui.painter().line_segment(
-                            [header_rect.left_bottom(), header_rect.right_bottom()],
-                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
-                        );
-
-                        ui.painter().text(
-                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
-                            egui::Align2::LEFT_CENTER,
-                            year,
-                            egui::FontId::proportional(crate::ui::styles::YEAR_HEADER_FONT_SIZE),
-                            ui.visuals().text_color()
-                        );
-
-                        let icon = if is_collapsed { "⏵" } else { "⏷" };
-                        ui.painter().text(
-                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_TOGGLE_OFFSET, 0.0),
-                            egui::Align2::LEFT_CENTER,
-                            icon,
-                            egui::FontId::monospace(crate::ui::styles::YEAR_HEADER_FONT_SIZE),
-                            ui.visuals().text_color()
-                        );
 
                         last_year = year.to_string();
                         // Reset last_month so first month of new year gets header
@@ -139,48 +117,26 @@ pub fn render_heatmap_component(
                     }
 
                     if config.show_weekend_emphasis && month != last_month {
-                        let header_rect = ui.allocate_exact_size(
-                            egui::vec2(config.y_label_width, crate::ui::styles::MONTH_HEADER_HEIGHT),
-                            egui::Sense::click(),
-                        ).0;
-
                         let is_collapsed = state.collapsed_months.contains(month);
-                        let response = ui.interact(header_rect, ui.id().with(format!("{}_left", month)), egui::Sense::click());
-
-                        if response.clicked() {
+                        if crate::ui::components::render_collapsible_header(
+                            ui,
+                            format!("{}_left", month),
+                            crate::ui::components::HeaderConfig {
+                                label: month,
+                                width: config.y_label_width,
+                                height: crate::ui::styles::MONTH_HEADER_HEIGHT,
+                                font_size: crate::ui::styles::MONTH_HEADER_FONT_SIZE,
+                                is_collapsed,
+                                summary: None,
+                                show_icon: true,
+                            },
+                        ) {
                             if is_collapsed {
                                 state.collapsed_months.remove(month);
                             } else {
                                 state.collapsed_months.insert(month.to_string());
                             }
                         }
-
-                        let bg_color = if response.hovered() {
-                            if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
-                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) };
-
-                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
-                        ui.painter().line_segment(
-                            [header_rect.left_bottom(), header_rect.right_bottom()],
-                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
-                        );
-
-                        ui.painter().text(
-                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
-                            egui::Align2::LEFT_CENTER,
-                            month,
-                            egui::FontId::proportional(crate::ui::styles::MONTH_HEADER_FONT_SIZE),
-                            ui.visuals().text_color()
-                        );
-
-                        let icon = if is_collapsed { "⏵" } else { "⏷" };
-                        ui.painter().text(
-                            header_rect.left_center() + egui::vec2(crate::ui::styles::MONTH_TOGGLE_OFFSET, 0.0),
-                            egui::Align2::LEFT_CENTER,
-                            icon,
-                            egui::FontId::monospace(crate::ui::styles::MONTH_HEADER_FONT_SIZE),
-                            ui.visuals().text_color()
-                        );
 
                         last_month = month.to_string();
                     }
@@ -279,29 +235,7 @@ pub fn render_heatmap_component(
 
                     // Year Header
                     if config.show_weekend_emphasis && year != last_year {
-                        let header_rect = ui.allocate_exact_size(
-                            egui::vec2(24.0 * cell_width, crate::ui::styles::YEAR_HEADER_HEIGHT),
-                            egui::Sense::click(),
-                        ).0;
-
-                        let response = ui.interact(header_rect, ui.id().with(format!("{}_year_right", year)), egui::Sense::click());
-                        if response.clicked() {
-                            if state.collapsed_years.contains(year) {
-                                state.collapsed_years.remove(year);
-                            } else {
-                                state.collapsed_years.insert(year.to_string());
-                            }
-                        }
-
-                        let bg_color = if response.hovered() {
-                            if ui.visuals().dark_mode { egui::Color32::from_gray(80) } else { egui::Color32::from_gray(190) }
-                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) };
-
-                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
-                        ui.painter().line_segment(
-                            [header_rect.left_bottom(), header_rect.right_bottom()],
-                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
-                        );
+                        let is_collapsed = state.collapsed_years.contains(year);
 
                         let sum = config.yearly_sums.get(year).cloned().unwrap_or(0.0);
                         let val_text = if config.unit == "$" {
@@ -310,13 +244,25 @@ pub fn render_heatmap_component(
                             format!("Year Total: {:.1} {}", sum, config.unit)
                         };
 
-                        ui.painter().text(
-                            header_rect.right_center() + egui::vec2(-crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
-                            egui::Align2::RIGHT_CENTER,
-                            val_text,
-                            egui::FontId::proportional(crate::ui::styles::YEAR_HEADER_FONT_SIZE - 2.0),
-                            ui.visuals().text_color()
-                        );
+                        if crate::ui::components::render_collapsible_header(
+                            ui,
+                            format!("{}_year_right", year),
+                            crate::ui::components::HeaderConfig {
+                                label: "", // Don't repeat label on right
+                                width: 24.0 * cell_width,
+                                height: crate::ui::styles::YEAR_HEADER_HEIGHT,
+                                font_size: crate::ui::styles::YEAR_HEADER_FONT_SIZE,
+                                is_collapsed,
+                                summary: Some(val_text),
+                                show_icon: false,
+                            },
+                        ) {
+                            if is_collapsed {
+                                state.collapsed_years.remove(year);
+                            } else {
+                                state.collapsed_years.insert(year.to_string());
+                            }
+                        }
 
                         last_year = year.to_string();
                         // Reset last_month so first month of new year gets header
@@ -328,29 +274,7 @@ pub fn render_heatmap_component(
                     }
 
                     if config.show_weekend_emphasis && month != last_month {
-                        let header_rect = ui.allocate_exact_size(
-                            egui::vec2(24.0 * cell_width, crate::ui::styles::MONTH_HEADER_HEIGHT),
-                            egui::Sense::click(),
-                        ).0;
-
-                        let response = ui.interact(header_rect, ui.id().with(format!("{}_right", month)), egui::Sense::click());
-                        if response.clicked() {
-                            if state.collapsed_months.contains(month) {
-                                state.collapsed_months.remove(month);
-                            } else {
-                                state.collapsed_months.insert(month.to_string());
-                            }
-                        }
-
-                        let bg_color = if response.hovered() {
-                            if ui.visuals().dark_mode { egui::Color32::from_gray(60) } else { egui::Color32::from_gray(210) }
-                        } else if ui.visuals().dark_mode { egui::Color32::from_gray(45) } else { egui::Color32::from_gray(225) };
-
-                        ui.painter().rect_filled(header_rect, 0.0, bg_color);
-                        ui.painter().line_segment(
-                            [header_rect.left_bottom(), header_rect.right_bottom()],
-                            egui::Stroke::new(1.0, ui.visuals().widgets.noninteractive.bg_stroke.color)
-                        );
+                        let is_collapsed = state.collapsed_months.contains(month);
 
                         let sum = config.monthly_sums.get(month).cloned().unwrap_or(0.0);
                         let val_text = if config.unit == "$" {
@@ -359,13 +283,25 @@ pub fn render_heatmap_component(
                             format!("Total: {:.2} {}", sum, config.unit)
                         };
 
-                        ui.painter().text(
-                            header_rect.right_center() + egui::vec2(-crate::ui::styles::MONTH_LABEL_OFFSET, 0.0),
-                            egui::Align2::RIGHT_CENTER,
-                            val_text,
-                            egui::FontId::proportional(crate::ui::styles::MONTH_SUMMARY_FONT_SIZE),
-                            ui.visuals().text_color()
-                        );
+                        if crate::ui::components::render_collapsible_header(
+                            ui,
+                            format!("{}_right", month),
+                            crate::ui::components::HeaderConfig {
+                                label: "", // Don't repeat label on right
+                                width: 24.0 * cell_width,
+                                height: crate::ui::styles::MONTH_HEADER_HEIGHT,
+                                font_size: crate::ui::styles::MONTH_HEADER_FONT_SIZE,
+                                is_collapsed,
+                                summary: Some(val_text),
+                                show_icon: false,
+                            },
+                        ) {
+                            if is_collapsed {
+                                state.collapsed_months.remove(month);
+                            } else {
+                                state.collapsed_months.insert(month.to_string());
+                            }
+                        }
 
                         last_month = month.to_string();
                     }

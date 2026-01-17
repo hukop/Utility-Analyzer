@@ -22,6 +22,7 @@ struct PgeAnalyzerApp {
     error_message: Option<String>,
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
+    first_frame: bool,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -41,6 +42,7 @@ impl Default for PgeAnalyzerApp {
             error_message: None,
             data_dir,
             heatmap_state: charts::HeatmapState::default(),
+            first_frame: true,
         }
     }
 }
@@ -62,6 +64,7 @@ impl PgeAnalyzerApp {
             error_message: None,
             data_dir: config.get_data_dir(),
             heatmap_state: charts::HeatmapState::default(),
+            first_frame: true,
         };
 
         // Try to auto-load data
@@ -328,6 +331,11 @@ impl PgeAnalyzerApp {
 
 impl eframe::App for PgeAnalyzerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        if self.first_frame {
+            ui::apply_custom_style(ctx, self.config.ui.dark_mode);
+            self.first_frame = false;
+        }
+
         self.handle_input(ctx);
 
         egui::SidePanel::left("sidebar")
