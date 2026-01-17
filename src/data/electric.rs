@@ -266,7 +266,7 @@ impl ElectricData {
         for point in &self.data {
             let hour = point.timestamp.hour() as usize;
             // Only include hours 6-18 (indices 0-12 in our 13-element array)
-            if hour >= 6 && hour <= 18 {
+            if (6..=18).contains(&hour) {
                 let date_key = point.timestamp.format("%Y-%m-%d").to_string();
                 let day_data = daily_data.entry(date_key).or_insert([0.0; 13]);
                 day_data[hour - 6] += point.export_kwh;

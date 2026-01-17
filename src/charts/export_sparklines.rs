@@ -270,7 +270,7 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                 // Tooltip showing hourly breakdown
                 if spark_response.hovered() {
                     spark_response.on_hover_ui(|ui| {
-                        ui.label(format!("{}", date_str));
+                        ui.label(date_str.to_string());
                         ui.separator();
                         for (i, &val) in day_export.iter().enumerate() {
                             let hour = i + 6;

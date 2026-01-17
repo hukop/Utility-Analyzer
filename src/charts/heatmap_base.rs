@@ -408,7 +408,7 @@ pub fn render_heatmap_component(
                             }
 
                             if let Some(((min_d, max_d), (min_h, max_h))) = selected_indices {
-                                if day_idx >= min_d && day_idx <= max_d && hour >= min_h && hour <= max_h {
+                                if (min_d..=max_d).contains(&day_idx) && (min_h..=max_h).contains(&hour) {
                                     selection_rect = Some(selection_rect.map_or(rect, |r| r.union(rect)));
                                 }
                             }

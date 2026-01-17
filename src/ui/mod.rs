@@ -49,9 +49,11 @@ impl ChartView {
             _ => Self::DailyKwh, // Default fallback
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
-        match self {
+impl std::fmt::Display for ChartView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let s = match self {
             Self::DailyKwh => "DailyKwh",
             Self::WeekdayHeatmap => "WeekdayHeatmap",
             Self::DailyHeatmap => "DailyHeatmap",
@@ -59,6 +61,7 @@ impl ChartView {
             Self::HourlyProfile => "HourlyProfile",
             Self::ExportSparklines => "ExportSparklines",
             Self::GasDaily => "GasDaily",
-        }.to_string()
+        };
+        write!(f, "{}", s)
     }
 }
