@@ -221,6 +221,10 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                 if max_val > 0.0 {
                     let padding = 4.0;
                     let draw_rect = spark_rect.shrink(padding);
+
+                    // Create a painter capable of clipping to the sparkline area
+                    let painter = ui.painter().with_clip_rect(spark_rect);
+
                     let step_x = draw_rect.width() / (day_export.len() - 1).max(1) as f32;
 
                     let points: Vec<egui::Pos2> = day_export.iter().enumerate().map(|(i, &val)| {
@@ -246,7 +250,7 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                                 egui::pos2(p1.x, draw_rect.bottom()),
                             ];
 
-                            ui.painter().add(egui::Shape::convex_polygon(
+                            painter.add(egui::Shape::convex_polygon(
                                 quad,
                                 fill_color,
                                 egui::Stroke::NONE,
@@ -257,7 +261,7 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                     // Draw line
                     let line_color = egui::Color32::from_rgb(220, 180, 0);
                     for i in 0..points.len().saturating_sub(1) {
-                        ui.painter().line_segment(
+                        painter.line_segment(
                             [points[i], points[i + 1]],
                             egui::Stroke::new(1.5, line_color)
                         );
