@@ -221,9 +221,7 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                 if max_val > 0.0 {
                     let padding = 4.0;
                     let draw_rect = spark_rect.shrink(padding);
-
-                    // Create a painter capable of clipping to the sparkline area
-                    let painter = ui.painter().with_clip_rect(spark_rect);
+                    let painter = ui.painter();
 
                     let step_x = draw_rect.width() / (day_export.len() - 1).max(1) as f32;
 
@@ -234,36 +232,12 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                         egui::pos2(x, y)
                     }).collect();
 
-                    // Fill area under curve
-                    if points.len() >= 2 {
-                        let fill_color = egui::Color32::from_rgba_unmultiplied(220, 180, 0, 40);
-
-                        for i in 0..points.len() - 1 {
-                            let p1 = points[i];
-                            let p2 = points[i + 1];
-
-                            // Create a quad (convex) for this segment
-                            let quad = vec![
-                                p1,
-                                p2,
-                                egui::pos2(p2.x, draw_rect.bottom()),
-                                egui::pos2(p1.x, draw_rect.bottom()),
-                            ];
-
-                            painter.add(egui::Shape::convex_polygon(
-                                quad,
-                                fill_color,
-                                egui::Stroke::NONE,
-                            ));
-                        }
-                    }
-
-                    // Draw line
+                    // Draw line with thicker stroke to give it weight
                     let line_color = egui::Color32::from_rgb(220, 180, 0);
                     for i in 0..points.len().saturating_sub(1) {
                         painter.line_segment(
                             [points[i], points[i + 1]],
-                            egui::Stroke::new(1.5, line_color)
+                            egui::Stroke::new(2.0, line_color)
                         );
                     }
                 }

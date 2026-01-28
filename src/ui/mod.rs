@@ -1,7 +1,10 @@
 pub mod styles;
 pub mod components;
+pub mod window;
 
 pub use styles::*;
+pub use window::{WindowResizeState, handle_window_resize, render_title_bar};
+
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChartView {

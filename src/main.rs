@@ -23,6 +23,7 @@ struct PgeAnalyzerApp {
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
     first_frame: bool,
+    resize_state: ui::WindowResizeState,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -43,6 +44,7 @@ impl Default for PgeAnalyzerApp {
             data_dir,
             heatmap_state: charts::HeatmapState::default(),
             first_frame: true,
+            resize_state: ui::WindowResizeState::new(),
         }
     }
 }
@@ -65,6 +67,7 @@ impl PgeAnalyzerApp {
             data_dir: config.get_data_dir(),
             heatmap_state: charts::HeatmapState::default(),
             first_frame: true,
+            resize_state: ui::WindowResizeState::new(),
         };
 
         // Try to auto-load data
@@ -331,16 +334,47 @@ impl PgeAnalyzerApp {
 
 impl eframe::App for PgeAnalyzerApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        // Handle frameless window resize (must be first)
+        ui::handle_window_resize(ctx, &mut self.resize_state);
+
         if self.first_frame {
             ui::apply_custom_style(ctx, self.config.ui.dark_mode);
             self.first_frame = false;
         }
 
+        // Responsive scaling: adjust UI scale based on window WIDTH only
+        // Reference: 1400 physical pixels width = 1.0 scale
+        // Height is ignored since charts scroll vertically
+        let current_ppp = ctx.pixels_per_point();
+        let screen_rect = ctx.screen_rect();
+
+        // Convert logical pixels to physical pixels (stable reference)
+        let physical_width = screen_rect.width() * current_ppp;
+
+        // Calculate scale factor based on physical width only
+        let auto_scale = physical_width / 1400.0;
+
+        // Clamp scale between 0.6 and 2.0 to avoid extremes
+        let base_scale = auto_scale.clamp(0.6, 2.0);
+
+        // Apply user's font_scale preference on top
+        let final_scale = base_scale * self.config.ui.font_scale;
+
+        // Only update if scale changed significantly (avoid constant redraws)
+        if (final_scale - current_ppp).abs() > 0.05 {
+            ctx.set_pixels_per_point(final_scale);
+        }
+
+        // Save window size every frame
+        let available = ctx.available_rect();
+        self.config.window.width = available.width() as f32;
+        self.config.window.height = available.height() as f32;
+        let _ = self.config.save();
+
         self.handle_input(ctx);
 
-        egui::TopBottomPanel::top("title_bar").show(ctx, |ui| {
-            ui::components::render_title_bar(ui, "PG&E Usage Analyzer");
-        });
+        // Custom title bar for frameless window
+        ui::render_title_bar(ctx, "PG&E Usage Analyzer");
 
         egui::SidePanel::left("sidebar")
             .min_width(200.0)
@@ -353,6 +387,9 @@ impl eframe::App for PgeAnalyzerApp {
                 self.render_main_content(ui);
             });
         });
+
+        // Apply resize cursor at end of frame (overrides UI cursors)
+        self.resize_state.apply_cursor(ctx);
     }
 }
 
@@ -384,11 +421,19 @@ fn run_app() -> Result<(), eframe::Error> {
         Config::default()
     });
 
+    let mut viewport = egui::ViewportBuilder::default()
+        .with_inner_size([config.window.width, config.window.height])
+        .with_title("PG&E Usage Analyzer")
+        .with_decorations(false)  // Frameless window - custom title bar
+        .with_min_inner_size([400.0, 300.0]);
+
+    // Restore maximized state
+    if config.window.maximized {
+        viewport = viewport.with_maximized(true);
+    }
+
     let options = eframe::NativeOptions {
-        viewport: egui::ViewportBuilder::default()
-            .with_inner_size([config.window.width, config.window.height])
-            .with_title("PG&E Usage Analyzer")
-            .with_decorations(false),
+        viewport,
         ..Default::default()
     };
 

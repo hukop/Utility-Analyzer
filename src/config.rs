@@ -23,6 +23,10 @@ pub struct WindowConfig {
     pub width: f32,
     /// Window height
     pub height: f32,
+    /// Window x position
+    pub x: Option<f32>,
+    /// Window y position
+    pub y: Option<f32>,
     /// Whether to start maximized
     pub maximized: bool,
 }
@@ -46,6 +50,8 @@ impl Default for Config {
             window: WindowConfig {
                 width: 1400.0,
                 height: 900.0,
+                x: None,
+                y: None,
                 maximized: false,
             },
             ui: UiConfig {
