@@ -31,6 +31,8 @@ pub struct HeatmapState {
     pub collapsed_months: HashSet<String>,
     /// Set of year keys (YYYY) that are currently collapsed.
     pub collapsed_years: HashSet<String>,
+    /// Current horizontal scroll offset for synchronizing sticky headers.
+    pub scroll_offset: f32,
 }
 
 /// Calculates a moving average over a sliding window.

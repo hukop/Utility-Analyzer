@@ -11,7 +11,7 @@ pub fn render_daily_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatma
         unit: "kWh".to_string(),
         selection_label: "Click and drag to select a range to view total kWh".to_string(),
         show_weekend_emphasis: true,
-        x_label_interval: 3,
+        x_label_interval: 1,
         y_label_width: 100.0,
         cell_height: 25.0,
         monthly_sums: &data.monthly_kwh_sums,

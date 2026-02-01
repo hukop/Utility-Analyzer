@@ -263,7 +263,7 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
 
                 // Draw title text
                 ui.painter().text(
-                    egui::pos2(title_rect.min.x + 4.0, title_rect.center().y),
+                    egui::pos2(title_rect.min.x + 4.0, title_rect.center().y + 5.0),
                     egui::Align2::LEFT_CENTER,
                     title,
                     egui::FontId::proportional(14.0),

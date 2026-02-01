@@ -69,14 +69,53 @@ pub fn render_heatmap_component(
     ui.label(&config.selection_label);
     ui.add_space(crate::ui::styles::CHART_SPACING);
 
-    egui::ScrollArea::both().show(ui, |ui| {
+    // Sticky Header
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+        ui.add_space(config.y_label_width);
+        ui.add_space(ui.style().spacing.item_spacing.x);
+
+        egui::ScrollArea::horizontal()
+            .id_salt("header_scroll_ignore")
+            .enable_scrolling(false)
+            .horizontal_scroll_offset(state.scroll_offset)
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
+                    for hour in 0..24 {
+                        let label = if hour % config.x_label_interval == 0 {
+                            format!("{}", hour)
+                        } else {
+                            String::new()
+                        };
+
+                        let (rect, _) = ui.allocate_exact_size(
+                            egui::vec2(cell_width, 20.0),
+                            egui::Sense::hover(),
+                        );
+
+                        if !label.is_empty() {
+                            ui.painter().text(
+                                rect.center(),
+                                egui::Align2::CENTER_CENTER,
+                                label,
+                                egui::FontId::proportional(crate::ui::styles::AXIS_FONT_SIZE),
+                                ui.visuals().text_color(),
+                            );
+                        }
+                    }
+                });
+            });
+    });
+
+    let scroll_output = egui::ScrollArea::both().id_salt(format!("{}_main", config.title)).show(ui, |ui| {
         let content_start_pos = ui.cursor().left_top();
 
         ui.horizontal(|ui| {
             // Y-axis labels
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-                ui.add_space(20.0); // Header offset
+                // ui.add_space(20.0); // Header offset REMOVED
 
                 let mut last_month = String::new();
                 let mut last_year = String::new();
@@ -198,32 +237,7 @@ pub fn render_heatmap_component(
 
             ui.vertical(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-                // X-axis labels
-                ui.horizontal(|ui| {
-                    ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
-                    for hour in 0..24 {
-                        let label = if hour % config.x_label_interval == 0 {
-                            format!("{}", hour)
-                        } else {
-                            String::new()
-                        };
-
-                        let (rect, _) = ui.allocate_exact_size(
-                            egui::vec2(cell_width, 20.0),
-                            egui::Sense::hover(),
-                        );
-
-                        if !label.is_empty() {
-                            ui.painter().text(
-                                rect.center(),
-                                egui::Align2::CENTER_CENTER,
-                                label,
-                                egui::FontId::proportional(crate::ui::styles::AXIS_FONT_SIZE),
-                                ui.visuals().text_color(),
-                            );
-                        }
-                    }
-                });
+                // X-axis labels REMOVED
 
                 // Heatmap cells
                 let mut last_month = String::new();
@@ -404,8 +418,8 @@ pub fn render_heatmap_component(
 
                 // Final pass: Draw weekend boundaries OVER everything
                 let stroke = egui::Stroke::new(1.0, egui::Color32::from_white_alpha(120));
-                let total_width = config.y_label_width + (24.0 * cell_width);
-                let mut current_y = 20.0; // Starting offset for header
+                let total_width = config.y_label_width + ui.style().spacing.item_spacing.x + (24.0 * cell_width) + 7.0;
+                let mut current_y = 0.0; // Starting offset (was 20.0)
 
                 let mut last_month = String::new();
                 let mut last_year = String::new();
@@ -456,6 +470,8 @@ pub fn render_heatmap_component(
             });
         });
     });
+
+    state.scroll_offset = scroll_output.state.offset.x;
 
     if show_selection_info {
         if let Some(rect) = selection_rect {

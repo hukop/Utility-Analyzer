@@ -384,7 +384,9 @@ impl eframe::App for PgeAnalyzerApp {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::both().show(ui, |ui| {
-                self.render_main_content(ui);
+                ui::components::Card::new().show(ui, |ui| {
+                    self.render_main_content(ui);
+                });
             });
         });
 

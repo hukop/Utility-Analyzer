@@ -87,3 +87,25 @@ pub fn render_collapsible_header(
 
     clicked
 }
+
+/// A styled container for grouping content (like a material card).
+pub struct Card;
+
+impl Card {
+    pub fn new() -> Self {
+        Self
+    }
+
+    pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
+        let margin = ui.spacing().item_spacing.x;
+
+        egui::Frame::none()
+            .fill(ui.visuals().panel_fill)
+            .rounding(ui.visuals().widgets.noninteractive.rounding)
+            .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
+            .outer_margin(margin)
+            .inner_margin(margin)
+            .show(ui, add_contents)
+            .inner
+    }
+}

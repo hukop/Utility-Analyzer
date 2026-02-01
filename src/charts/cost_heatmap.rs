@@ -11,7 +11,7 @@ pub fn render_cost_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatmap
         unit: "$".to_string(),
         selection_label: "Click and drag to select a range to view total Cost".to_string(),
         show_weekend_emphasis: true,
-        x_label_interval: 3,
+        x_label_interval: 1,
         y_label_width: 100.0,
         cell_height: 25.0,
         monthly_sums: &data.monthly_cost_sums,
