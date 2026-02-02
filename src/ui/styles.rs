@@ -13,7 +13,7 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
     // Apply themed colors
     if visuals.dark_mode {
         // Windows 11-inspired dark theme
-        visuals.window_fill = egui::Color32::from_rgb(32, 32, 32);
+        visuals.window_fill = egui::Color32::TRANSPARENT; // Required for rounded viewport corners
         visuals.panel_fill = egui::Color32::from_rgb(28, 28, 28);
         visuals.extreme_bg_color = egui::Color32::from_rgb(24, 24, 24);
         visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(45, 45, 45);
@@ -22,7 +22,7 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
         visuals.widgets.active.bg_fill = theme_accent();
     } else {
         // Windows 11-inspired light theme
-        visuals.window_fill = window_bg();
+        visuals.window_fill = egui::Color32::TRANSPARENT; // Required for rounded viewport corners
         visuals.panel_fill = panel_bg();
         visuals.extreme_bg_color = egui::Color32::WHITE;
         visuals.widgets.noninteractive.bg_fill = widget_bg();
@@ -46,7 +46,9 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
     ctx.set_style(style);
 }
 
+
 pub const CHART_SPACING: f32 = 20.0;
+pub const WINDOW_ROUNDING: f32 = 20.0;
 
 // Sidebar & Layout Tokens
 pub const SIDEBAR_SECTION_SIZE: f32 = 15.0;
@@ -81,6 +83,15 @@ pub fn panel_bg() -> egui::Color32 {
 
 pub fn theme_accent() -> egui::Color32 {
     egui::Color32::from_rgb(0, 120, 212)
+}
+
+/// Returns the actual intended window background color for themes.
+pub fn actual_window_background(ctx: &egui::Context) -> egui::Color32 {
+    if ctx.style().visuals.dark_mode {
+        egui::Color32::from_rgb(32, 32, 32)
+    } else {
+        window_bg()
+    }
 }
 
 pub fn widget_bg() -> egui::Color32 {

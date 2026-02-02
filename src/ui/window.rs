@@ -239,14 +239,14 @@ fn direction_to_cursor(direction: ResizeDirection) -> CursorIcon {
 /// Height of the custom title bar.
 pub const CUSTOM_TITLE_BAR_HEIGHT: f32 = 32.0;
 
-/// Render a custom title bar with window controls.
-/// Returns true if window drag was initiated.
+
+/// Render a custom title bar as a TopBottomPanel.
 pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
     let mut drag_initiated = false;
 
     egui::TopBottomPanel::top("title_bar")
         .exact_height(CUSTOM_TITLE_BAR_HEIGHT)
-        .frame(egui::Frame::none().fill(ctx.style().visuals.window_fill))
+        .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
         .show(ctx, |ui| {
             ui.horizontal(|ui| {
                 ui.add_space(8.0);
@@ -272,33 +272,42 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
 
                 // Handle window drag
                 if title_response.drag_started() {
-                    ctx.send_viewport_cmd(ViewportCommand::StartDrag);
+                    ctx.send_viewport_cmd(egui::ViewportCommand::StartDrag);
                     drag_initiated = true;
                 }
 
                 // Handle double-click to maximize/restore
                 if title_response.double_clicked() {
                     let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                    ctx.send_viewport_cmd(ViewportCommand::Maximized(!is_maximized));
+                    ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                 }
 
                 // Window control buttons on the right
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    ui.add_space(4.0);
+                    // Remove side space so close button can tuck into the rounded corner
+                    // ui.add_space(4.0);
 
-                    // Close button - use simple X
+                    // Close button
                     let close_btn = ui.add(
                         egui::Button::new(egui::RichText::new("X").size(12.0).strong())
                             .frame(false)
                             .min_size(egui::vec2(32.0, 28.0))
                     );
                     if close_btn.clicked() {
-                        ctx.send_viewport_cmd(ViewportCommand::Close);
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
                     }
                     if close_btn.hovered() {
+                        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                        let window_rounding = if is_maximized { 2.0 } else { crate::ui::styles::WINDOW_ROUNDING };
+
                         ui.painter().rect_filled(
                             close_btn.rect,
-                            2.0,
+                            egui::Rounding {
+                                nw: 2.0,
+                                ne: window_rounding,
+                                sw: 2.0,
+                                se: 2.0,
+                            },
                             egui::Color32::from_rgb(196, 43, 28),
                         );
                     }
@@ -312,17 +321,17 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                             .min_size(egui::vec2(32.0, 28.0))
                     );
                     if max_btn.clicked() {
-                        ctx.send_viewport_cmd(ViewportCommand::Maximized(!is_maximized));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                     }
 
-                    // Minimize button - use dash/underscore
+                    // Minimize button
                     let min_btn = ui.add(
                         egui::Button::new(egui::RichText::new("—").size(12.0))
                             .frame(false)
                             .min_size(egui::vec2(32.0, 28.0))
                     );
                     if min_btn.clicked() {
-                        ctx.send_viewport_cmd(ViewportCommand::Minimized(true));
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                     }
                 });
             });

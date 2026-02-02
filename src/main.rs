@@ -83,9 +83,6 @@ impl PgeAnalyzerApp {
 
         if let Some(path) = electric_path {
             if let Err(e) = self.load_electric_data(&path) {
-                // If it fails, maybe it was deleted or moved, don't show error if it was just an auto-load
-                // but if it was in config, maybe we should clear it?
-                // For now, just log and continue to gas.
                 eprintln!("Failed to auto-load electric data from {:?}: {}", path, e);
             }
         }
@@ -132,10 +129,6 @@ impl PgeAnalyzerApp {
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
-        //ui.heading("PG&E Usage Analyzer");
-        //ui.separator();
-
-        // File loading buttons
         ui.label(egui::RichText::new("Data Files:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
 
         if ui.button("📂 Load Electric CSV").clicked() {
@@ -170,7 +163,6 @@ impl PgeAnalyzerApp {
 
         ui.separator();
 
-        // Data status
         ui.label(egui::RichText::new("Status:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
         if self.electric_data.is_some() {
             ui.label(egui::RichText::new("✔ Electric data loaded")
@@ -194,13 +186,11 @@ impl PgeAnalyzerApp {
 
         ui.separator();
 
-        // Chart selection
         ui.label(egui::RichText::new("Charts:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
 
         for view in ChartView::all() {
             let is_selected = self.current_view == view;
 
-            // Disable gas chart if no gas data
             let enabled = if view == ChartView::GasDaily {
                 self.gas_data.is_some()
             } else {
@@ -222,7 +212,6 @@ impl PgeAnalyzerApp {
 
         ui.separator();
 
-        // Theme Toggle
         ui.label(egui::RichText::new("Appearance:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
 
         let mut dark_mode = self.config.ui.dark_mode.unwrap_or(false);
@@ -234,39 +223,45 @@ impl PgeAnalyzerApp {
     }
 
     fn render_main_content(&mut self, ui: &mut egui::Ui) {
-        // Show error message if any
         if let Some(ref error) = self.error_message {
             ui.colored_label(egui::Color32::RED, error);
             ui.separator();
         }
 
-        // Render current chart
         match self.current_view {
             ChartView::DailyKwh => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Daily kWh");
-                    charts::render_daily_kwh(ui, data);
+                    ui::components::Card::new().show(ui, |ui| {
+                        charts::render_daily_kwh(ui, data);
+                    });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
             }
             ChartView::WeekdayHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_weekday_heatmap(ui, data, &mut self.heatmap_state);
+                    ui::components::Card::new().show(ui, |ui| {
+                        charts::render_weekday_heatmap(ui, data, &mut self.heatmap_state);
+                    });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
             }
             ChartView::DailyHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_daily_heatmap(ui, data, &mut self.heatmap_state);
+                    ui::components::Card::new().show(ui, |ui| {
+                        charts::render_daily_heatmap(ui, data, &mut self.heatmap_state);
+                    });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
             }
             ChartView::CostHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_cost_heatmap(ui, data, &mut self.heatmap_state);
+                    ui::components::Card::new().show(ui, |ui| {
+                        charts::render_cost_heatmap(ui, data, &mut self.heatmap_state);
+                    });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
@@ -281,7 +276,9 @@ impl PgeAnalyzerApp {
             }
             ChartView::ExportSparklines => {
                 if let Some(ref data) = self.electric_data {
-                    charts::render_export_sparklines(ui, data, &mut self.heatmap_state);
+                    ui::components::Card::new().show(ui, |ui| {
+                        charts::render_export_sparklines(ui, data, &mut self.heatmap_state);
+                    });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
@@ -298,13 +295,11 @@ impl PgeAnalyzerApp {
     }
 
     fn handle_input(&mut self, ctx: &egui::Context) {
-        // Handle global zoom with Ctrl + Mouse Wheel
         let zoom_delta = ctx.input(|i| i.zoom_delta());
         if zoom_delta != 1.0 {
             ctx.set_pixels_per_point(ctx.pixels_per_point() * zoom_delta);
         }
 
-        // Handle navigation and other shortcuts
         ctx.input(|i| {
             if i.key_pressed(egui::Key::ArrowUp) {
                 let all_views = ChartView::all();
@@ -333,64 +328,80 @@ impl PgeAnalyzerApp {
 }
 
 impl eframe::App for PgeAnalyzerApp {
+    fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
+        [0.0, 0.0, 0.0, 0.0] // Deep transparency
+    }
+
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Handle frameless window resize (must be first)
-        ui::handle_window_resize(ctx, &mut self.resize_state);
+        // 0. Ensure style transparency
+        ctx.style_mut(|style| style.visuals.window_fill = egui::Color32::TRANSPARENT);
 
         if self.first_frame {
             ui::apply_custom_style(ctx, self.config.ui.dark_mode);
             self.first_frame = false;
         }
 
-        // Responsive scaling: adjust UI scale based on window WIDTH only
-        // Reference: 1400 physical pixels width = 1.0 scale
-        // Height is ignored since charts scroll vertically
+        // Responsive scaling & Window State
         let current_ppp = ctx.pixels_per_point();
         let screen_rect = ctx.screen_rect();
-
-        // Convert logical pixels to physical pixels (stable reference)
         let physical_width = screen_rect.width() * current_ppp;
+        let auto_scale = (physical_width / 1400.0).clamp(0.6, 2.0);
+        let final_scale = auto_scale * self.config.ui.font_scale;
 
-        // Calculate scale factor based on physical width only
-        let auto_scale = physical_width / 1400.0;
-
-        // Clamp scale between 0.6 and 2.0 to avoid extremes
-        let base_scale = auto_scale.clamp(0.6, 2.0);
-
-        // Apply user's font_scale preference on top
-        let final_scale = base_scale * self.config.ui.font_scale;
-
-        // Only update if scale changed significantly (avoid constant redraws)
         if (final_scale - current_ppp).abs() > 0.05 {
             ctx.set_pixels_per_point(final_scale);
         }
 
-        // Save window size every frame
         let available = ctx.available_rect();
         self.config.window.width = available.width() as f32;
         self.config.window.height = available.height() as f32;
         let _ = self.config.save();
 
         self.handle_input(ctx);
+        ui::handle_window_resize(ctx, &mut self.resize_state);
 
-        // Custom title bar for frameless window
+        // 1. Paint the main window background manually
+        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+        let rounding = if is_maximized { 0.0 } else { ui::styles::WINDOW_ROUNDING };
+        let bg_color = ui::actual_window_background(ctx);
+
+        ctx.layer_painter(egui::LayerId::background()).rect_filled(
+            ctx.screen_rect(),
+            egui::Rounding::same(rounding),
+            bg_color,
+        );
+
+        if !is_maximized {
+            ctx.layer_painter(egui::LayerId::background()).rect_stroke(
+                ctx.screen_rect(),
+                egui::Rounding::same(rounding),
+                ctx.style().visuals.widgets.noninteractive.bg_stroke,
+            );
+        }
+
+        // --- Custom Panels (Transparent) ---
         ui::render_title_bar(ctx, "PG&E Usage Analyzer");
 
-        egui::SidePanel::left("sidebar")
-            .min_width(200.0)
+        egui::SidePanel::left("sidebar_panel")
+            .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
+            .resizable(false)
+            .default_width(200.0)
             .show(ctx, |ui| {
-                self.render_sidebar(ui);
+                ui.add_space(20.0); // Space for top rounding
+                egui::Frame::none()
+                    .inner_margin(egui::Margin::symmetric(10.0, 0.0))
+                    .show(ui, |ui| {
+                        self.render_sidebar(ui);
+                    });
             });
 
-        egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::both().show(ui, |ui| {
-                ui::components::Card::new().show(ui, |ui| {
-                    self.render_main_content(ui);
-                });
+        egui::CentralPanel::default()
+            .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
+            .show(ctx, |ui| {
+                ui.add_space(10.0);
+                self.render_main_content(ui);
             });
-        });
 
-        // Apply resize cursor at end of frame (overrides UI cursors)
         self.resize_state.apply_cursor(ctx);
     }
 }
@@ -406,7 +417,6 @@ pub extern "system" fn WinMain(
     match run_app() {
         Ok(_) => 0,
         Err(e) => {
-            // In a GUI app, we can't easily show errors, so just return error code
             eprintln!("Application error: {}", e);
             1
         }
@@ -426,10 +436,10 @@ fn run_app() -> Result<(), eframe::Error> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([config.window.width, config.window.height])
         .with_title("PG&E Usage Analyzer")
-        .with_decorations(false)  // Frameless window - custom title bar
+        .with_decorations(false)
+        .with_transparent(true)
         .with_min_inner_size([400.0, 300.0]);
 
-    // Restore maximized state
     if config.window.maximized {
         viewport = viewport.with_maximized(true);
     }
