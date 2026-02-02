@@ -48,7 +48,7 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
 
 
 pub const CHART_SPACING: f32 = 20.0;
-pub const WINDOW_ROUNDING: f32 = 20.0;
+pub const WINDOW_ROUNDING: f32 = 12.0;
 
 // Sidebar & Layout Tokens
 pub const SIDEBAR_SECTION_SIZE: f32 = 15.0;

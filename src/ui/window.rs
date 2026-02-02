@@ -246,8 +246,11 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
 
     egui::TopBottomPanel::top("title_bar")
         .exact_height(CUSTOM_TITLE_BAR_HEIGHT)
-        .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
+        .frame(egui::Frame::none()
+            .fill(egui::Color32::TRANSPARENT)
+            .inner_margin(0.0))
         .show(ctx, |ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
             ui.horizontal(|ui| {
                 ui.add_space(8.0);
 
@@ -284,53 +287,73 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
 
                 // Window control buttons on the right
                 ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                    // Remove side space so close button can tuck into the rounded corner
-                    // ui.add_space(4.0);
+                    let btn_size = egui::vec2(34.0, CUSTOM_TITLE_BAR_HEIGHT); // Slightly wider and full height
+                    let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+                    let text_color = ui.visuals().text_color();
 
-                    // Close button
-                    let close_btn = ui.add(
-                        egui::Button::new(egui::RichText::new("X").size(12.0).strong())
-                            .frame(false)
-                            .min_size(egui::vec2(32.0, 28.0))
-                    );
-                    if close_btn.clicked() {
-                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    // 1. Close Button
+                    let (mut rect, response) = ui.allocate_exact_size(btn_size, egui::Sense::click());
+
+                    // Slightly expand the hover area to perfectly touch the widow edge/stroke
+                    if !is_maximized {
+                        rect.max.x += 1.0;
+                        rect.min.y -= 1.0;
                     }
-                    if close_btn.hovered() {
-                        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                        let window_rounding = if is_maximized { 2.0 } else { crate::ui::styles::WINDOW_ROUNDING };
 
+                    if response.hovered() {
+                        let window_rounding = if is_maximized { 0.0 } else { crate::ui::styles::WINDOW_ROUNDING };
                         ui.painter().rect_filled(
-                            close_btn.rect,
+                            rect,
                             egui::Rounding {
-                                nw: 2.0,
+                                nw: 0.0,
                                 ne: window_rounding,
-                                sw: 2.0,
-                                se: 2.0,
+                                sw: 0.0,
+                                se: 0.0,
                             },
                             egui::Color32::from_rgb(196, 43, 28),
                         );
                     }
-
-                    // Maximize/Restore button
-                    let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-                    let max_icon = if is_maximized { "❐" } else { "□" };
-                    let max_btn = ui.add(
-                        egui::Button::new(egui::RichText::new(max_icon).size(12.0))
-                            .frame(false)
-                            .min_size(egui::vec2(32.0, 28.0))
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "X",
+                        egui::FontId::proportional(12.0),
+                        if response.hovered() { egui::Color32::WHITE } else { text_color },
                     );
-                    if max_btn.clicked() {
+                    if response.clicked() {
+                        ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+                    }
+
+                    // 2. Maximize/Restore Button
+                    let (rect, response) = ui.allocate_exact_size(btn_size, egui::Sense::click());
+                    if response.hovered() {
+                        ui.painter().rect_filled(rect, 0.0, egui::Color32::from_gray(60));
+                    }
+                    let max_icon = if is_maximized { "❐" } else { "□" };
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        max_icon,
+                        egui::FontId::proportional(12.0),
+                        text_color,
+                    );
+                    if response.clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Maximized(!is_maximized));
                     }
 
-                    // Minimize button
-                    let min_btn = ui.add(
-                        egui::Button::new(egui::RichText::new("—").size(12.0))
-                            .frame(false)
-                            .min_size(egui::vec2(32.0, 28.0))
+                    // 3. Minimize Button
+                    let (rect, response) = ui.allocate_exact_size(btn_size, egui::Sense::click());
+                    if response.hovered() {
+                        ui.painter().rect_filled(rect, 0.0, egui::Color32::from_gray(60));
+                    }
+                    ui.painter().text(
+                        rect.center(),
+                        egui::Align2::CENTER_CENTER,
+                        "—",
+                        egui::FontId::proportional(12.0),
+                        text_color,
                     );
-                    if min_btn.clicked() {
+                    if response.clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Minimized(true));
                     }
                 });
