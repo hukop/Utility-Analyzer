@@ -38,7 +38,11 @@ pub fn render_heatmap_component(
 
     ui.heading(&config.title);
 
-    let cell_width = 35.0;
+    // Calculate dynamic cell width to fill available space
+    let available_width = ui.available_width();
+    let reserved_width = config.y_label_width + config.daily_sum_width + 20.0; // Labels + Sum column + padding
+    let calculated_cell_width = (available_width - reserved_width) / 24.0;
+    let cell_width = calculated_cell_width.max(35.0); // Don't go below 35px
     let cell_height = config.cell_height;
 
     // Calculate selection sum if active
