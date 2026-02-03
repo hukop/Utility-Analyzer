@@ -212,6 +212,27 @@ impl ElectricData {
         profile
     }
 
+    /// Returns average export kWh grouped by hour of day (0-23).
+    pub fn hourly_export_profile(&self) -> [f64; 24] {
+        let mut totals = [0.0; 24];
+        let mut counts = [0u32; 24];
+
+        for point in &self.data {
+            let hour = point.timestamp.hour() as usize;
+            totals[hour] += point.export_kwh;
+            counts[hour] += 1;
+        }
+
+        let mut profile = [0.0; 24];
+        for hour in 0..24 {
+            if counts[hour] > 0 {
+                profile[hour] = totals[hour] / counts[hour] as f64;
+            }
+        }
+
+        profile
+    }
+
     /// Returns a list of dates and a 2D matrix of kWh by [day][hour].
     pub fn daily_hour_heatmap(&self) -> (Vec<String>, Vec<Vec<f64>>) {
         let mut daily_data: HashMap<String, [f64; 24]> = HashMap::new();
