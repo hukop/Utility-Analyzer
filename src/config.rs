@@ -39,6 +39,8 @@ pub struct UiConfig {
     pub dark_mode: Option<bool>,
     /// Font size multiplier
     pub font_scale: f32,
+    /// Heatmap color palette
+    pub heatmap_palette: Option<String>,
 }
 
 impl Default for Config {
@@ -58,6 +60,7 @@ impl Default for Config {
                 default_chart: "DailyKwh".to_string(),
                 dark_mode: None,
                 font_scale: 1.0,
+                heatmap_palette: Some("Viridis".to_string()),
             },
         }
     }

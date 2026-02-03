@@ -1,5 +1,4 @@
 use egui::Ui;
-use crate::charts::colormap::get_viridis_color;
 use crate::charts::HeatmapState;
 use chrono::Datelike;
 
@@ -14,6 +13,7 @@ pub struct HeatmapConfig<'a> {
     pub monthly_sums: &'a std::collections::HashMap<String, f64>,
     pub yearly_sums: &'a std::collections::HashMap<String, f64>,
     pub daily_sum_width: f32,
+    pub max_value_override: Option<f64>,
 }
 
 pub fn render_heatmap_component(
@@ -29,12 +29,12 @@ pub fn render_heatmap_component(
     }
 
     // Find min/max for color scaling
-    let mut max_val = f64::MIN;
-    for day_data in heatmap_data {
-        for &val in day_data {
-            max_val = max_val.max(val);
-        }
-    }
+    let data_max = heatmap_data.iter()
+        .flat_map(|day| day.iter())
+        .copied()
+        .fold(f64::MIN, f64::max);
+
+    let max_val = config.max_value_override.unwrap_or(data_max);
 
     ui.heading(&config.title);
 
@@ -338,7 +338,7 @@ pub fn render_heatmap_component(
                         ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
 
                         for (hour, &val) in day_data.iter().enumerate() {
-                            let color = get_viridis_color(val, 0.0, max_val);
+                            let color = crate::charts::colormap::get_heatmap_color(val, 0.0, max_val, state.palette);
 
                             let (rect, response) = ui.allocate_exact_size(
                                 egui::vec2(cell_width, cell_height),
@@ -381,10 +381,8 @@ pub fn render_heatmap_component(
                                     } else {
                                         format!("{:.2} {}", val, config.unit)
                                     };
-                                    ui.label(format!(
-                                        "{}, {}:00\n{}",
-                                        date_label, hour, value_formatted
-                                    ));
+                                    ui.label(egui::RichText::new(date_label).strong());
+                                    ui.label(egui::RichText::new(format!("{:2}:00 -> {}", hour, value_formatted)).monospace());
                                 });
                             }
                         }

@@ -1,27 +1,69 @@
 use egui::Color32;
+use crate::charts::HeatmapPalette;
 
-/// Get a color from the standard Viridis color scale for a given value.
-/// 
-/// Uses a perfect 256-step look-up table extracted from Plotly.
-/// This guarantees 1:1 visual parity with Python-based scientific charts.
-pub fn get_viridis_color(val: f64, min: f64, max: f64) -> Color32 {
+/// Get a color from the selected color palette.
+pub fn get_heatmap_color(val: f64, min: f64, max: f64, palette: HeatmapPalette) -> Color32 {
     let t = if max > min {
         ((val - min) / (max - min)).clamp(0.0, 1.0)
     } else {
-        0.0 // Default to start of scale if range is zero
+        0.0
     };
 
-    // Map t (0.0 - 1.0) to index (0 - 255)
-    // We explicitly clamp to 0..=255 to ensure safety
+    match palette {
+        HeatmapPalette::Viridis => get_viridis_color_inner(t),
+        HeatmapPalette::Magma => get_magma_color_inner(t),
+        HeatmapPalette::GreenYellowRed => get_3_point_blend(t,
+            Color32::from_rgb(99, 190, 123),  // Green
+            Color32::from_rgb(255, 235, 132), // Yellow
+            Color32::from_rgb(248, 105, 107)  // Red
+        ),
+        HeatmapPalette::GreenWhiteRed => get_3_point_blend(t,
+            Color32::from_rgb(99, 190, 123),  // Green
+            Color32::from_rgb(255, 255, 255), // White
+            Color32::from_rgb(248, 105, 107)  // Red
+        ),
+        HeatmapPalette::YellowGreenBlue => get_3_point_blend(t,
+            Color32::from_rgb(255, 255, 204), // Pale Yellow
+            Color32::from_rgb(65, 171, 93),   // Mid Green
+            Color32::from_rgb(8, 64, 129)     // Deep Blue
+        ),
+    }
+}
+
+fn get_3_point_blend(t: f64, c1: Color32, c2: Color32, c3: Color32) -> Color32 {
+    if t <= 0.5 {
+        let local_t = (t * 2.0) as f32;
+        lerp_color(c1, c2, local_t)
+    } else {
+        let local_t = ((t - 0.5) * 2.0) as f32;
+        lerp_color(c2, c3, local_t)
+    }
+}
+
+fn lerp_color(c1: Color32, c2: Color32, t: f32) -> Color32 {
+    Color32::from_rgb(
+        (c1.r() as f32 * (1.0 - t) + c2.r() as f32 * t) as u8,
+        (c1.g() as f32 * (1.0 - t) + c2.g() as f32 * t) as u8,
+        (c1.b() as f32 * (1.0 - t) + c2.b() as f32 * t) as u8,
+    )
+}
+
+fn get_viridis_color_inner(t: f64) -> Color32 {
     let index = (t * 255.0).round() as usize;
-    let index = index.clamp(0, 255);
-    
-    let (r, g, b) = VIRIDIS_LUT[index];
+    let (r, g, b) = VIRIDIS_LUT[index.clamp(0, 255)];
     Color32::from_rgb(r, g, b)
 }
 
+fn get_magma_color_inner(t: f64) -> Color32 {
+    // For Magma, we'll use a 3-point blend to keep it lightweight and precise without massive LUTs.
+    get_3_point_blend(t,
+        Color32::from_rgb(0, 0, 4),      // Black/Purple
+        Color32::from_rgb(180, 4, 122),  // Pink/Magenta
+        Color32::from_rgb(252, 253, 191) // Pale Yellow
+    )
+}
+
 // 256-step Viridis Look-Up Table
-// Extracted directly from plotly.colors.sequential.Viridis
 const VIRIDIS_LUT: [(u8, u8, u8); 256] = [
     (67, 0, 84), (68, 2, 85), (68, 3, 86), (68, 5, 87), (68, 6, 89), (68, 7, 90), (68, 9, 91), (68, 10, 92),
     (69, 12, 94), (69, 13, 95), (69, 14, 96), (69, 16, 97), (69, 17, 99), (69, 18, 100), (69, 20, 101), (70, 21, 103),

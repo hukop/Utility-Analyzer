@@ -18,30 +18,6 @@ pub enum ChartView {
 }
 
 impl ChartView {
-    pub fn all() -> Vec<Self> {
-        vec![
-            Self::DailyKwh,
-            Self::WeekdayHeatmap,
-            Self::DailyHeatmap,
-            Self::CostHeatmap,
-            Self::HourlyProfile,
-            Self::ExportSparklines,
-            Self::GasDaily,
-        ]
-    }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Self::DailyKwh => "Daily kWh",
-            Self::WeekdayHeatmap => "Average kWh by Weekday and Hour",
-            Self::DailyHeatmap => "Daily by-hour kWh Heatmap",
-            Self::CostHeatmap => "Daily by-hour Cost Heatmap",
-            Self::HourlyProfile => "Average Daily Profile",
-            Self::ExportSparklines => "Export Sparklines (6-18h)",
-            Self::GasDaily => "Gas: Daily Usage (USD)",
-        }
-    }
-
     pub fn from_str(s: &str) -> Self {
         match s {
             "WeekdayHeatmap" => Self::WeekdayHeatmap,

@@ -1,4 +1,5 @@
 //! PGE Usage Analyzer
+#![deny(warnings)]
 //!
 //! A GUI application built with eframe/egui to analyze and visualize
 //! PG&E electric and natural gas usage data exported from their customer portal.
@@ -22,7 +23,6 @@ struct PgeAnalyzerApp {
     error_message: Option<String>,
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
-    first_frame: bool,
     resize_state: ui::WindowResizeState,
 }
 
@@ -35,6 +35,11 @@ impl Default for PgeAnalyzerApp {
 
         let data_dir = config.get_data_dir();
 
+        let mut heatmap_state = charts::HeatmapState::default();
+        if let Some(ref p) = config.ui.heatmap_palette {
+            heatmap_state.palette = charts::HeatmapPalette::from_name(p);
+        }
+
         Self {
             config: config.clone(),
             electric_data: None,
@@ -42,8 +47,7 @@ impl Default for PgeAnalyzerApp {
             current_view: ChartView::from_str(&config.ui.default_chart),
             error_message: None,
             data_dir,
-            heatmap_state: charts::HeatmapState::default(),
-            first_frame: true,
+            heatmap_state,
             resize_state: ui::WindowResizeState::new(),
         }
     }
@@ -58,6 +62,11 @@ impl PgeAnalyzerApp {
 
         ui::apply_custom_style(&cc.egui_ctx, config.ui.dark_mode);
 
+        let mut heatmap_state = charts::HeatmapState::default();
+        if let Some(ref p) = config.ui.heatmap_palette {
+            heatmap_state.palette = charts::HeatmapPalette::from_name(p);
+        }
+
         let mut app = Self {
             config: config.clone(),
             electric_data: None,
@@ -65,8 +74,7 @@ impl PgeAnalyzerApp {
             current_view: ChartView::from_str(&config.ui.default_chart),
             error_message: None,
             data_dir: config.get_data_dir(),
-            heatmap_state: charts::HeatmapState::default(),
-            first_frame: true,
+            heatmap_state,
             resize_state: ui::WindowResizeState::new(),
         };
 
@@ -161,58 +169,29 @@ impl PgeAnalyzerApp {
             }
         }
 
-        ui.separator();
+        ui.add_space(20.0);
+        ui.label(egui::RichText::new("Views:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
 
-        ui.label(egui::RichText::new("Status:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
-        if self.electric_data.is_some() {
-            ui.label(egui::RichText::new("✔ Electric data loaded")
-                .monospace()
-                .color(ui::styles::status_green()));
-        } else {
-            ui.label(egui::RichText::new("× No electric data")
-                .monospace()
-                .color(ui::styles::status_red()));
+        let views = [
+            (ChartView::DailyKwh, "📈 Daily Usage"),
+            (ChartView::DailyHeatmap, "⚡ Daily Heatmap"),
+            (ChartView::CostHeatmap, "💰 Cost Heatmap"),
+            (ChartView::WeekdayHeatmap, "📊 Weekday Avg"),
+            (ChartView::HourlyProfile, "🕒 Hourly Profile"),
+            (ChartView::ExportSparklines, "☀ Solar Export"),
+            (ChartView::GasDaily, "🔥 Gas Usage"),
+        ];
+
+        for (view, label) in views {
+            if ui.selectable_label(self.current_view == view, label).clicked() {
+                self.current_view = view.clone();
+                self.config.ui.default_chart = view.to_string();
+                let _ = self.config.save();
+            }
         }
 
-        if self.gas_data.is_some() {
-            ui.label(egui::RichText::new("✔ Gas data loaded")
-                .monospace()
-                .color(ui::styles::status_green()));
-        } else {
-            ui.label(egui::RichText::new("× No gas data")
-                .monospace()
-                .color(ui::styles::status_red()));
-        }
-
-        ui.separator();
-
-        ui.label(egui::RichText::new("Charts:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
-
-        for view in ChartView::all() {
-            let is_selected = self.current_view == view;
-
-            let enabled = if view == ChartView::GasDaily {
-                self.gas_data.is_some()
-            } else {
-                self.electric_data.is_some()
-            };
-
-            ui.add_enabled_ui(enabled, |ui| {
-                let mut text = egui::RichText::new(view.name());
-                if is_selected {
-                    text = text.color(egui::Color32::WHITE);
-                }
-                if ui.selectable_label(is_selected, text).clicked() {
-                    self.current_view = view;
-                    self.config.ui.default_chart = view.to_string();
-                    let _ = self.config.save();
-                }
-            });
-        }
-
-        ui.separator();
-
-        ui.label(egui::RichText::new("Appearance:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
+        ui.add_space(20.0);
+        ui.label(egui::RichText::new("Preferences:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
 
         let mut dark_mode = self.config.ui.dark_mode.unwrap_or(false);
         if ui.checkbox(&mut dark_mode, "🌙 Dark Mode").changed() {
@@ -220,6 +199,21 @@ impl PgeAnalyzerApp {
             let _ = self.config.save();
             ui::apply_custom_style(ui.ctx(), Some(dark_mode));
         }
+
+        ui.add_space(8.0);
+        ui.label(egui::RichText::new("Heatmap Palette:").size(12.0).color(ui.visuals().text_color().gamma_multiply(0.8)));
+
+        egui::ComboBox::from_id_salt("palette_sel")
+            .selected_text(self.heatmap_state.palette.name())
+            .width(ui.available_width())
+            .show_ui(ui, |ui| {
+                for p in charts::HeatmapPalette::all() {
+                    if ui.selectable_value(&mut self.heatmap_state.palette, *p, p.name()).clicked() {
+                        self.config.ui.heatmap_palette = Some(p.name().to_string());
+                        let _ = self.config.save();
+                    }
+                }
+            });
     }
 
     fn render_main_content(&mut self, ui: &mut egui::Ui) {
@@ -297,74 +291,20 @@ impl PgeAnalyzerApp {
             }
         }
     }
-
-    fn handle_input(&mut self, ctx: &egui::Context) {
-        let zoom_delta = ctx.input(|i| i.zoom_delta());
-        if zoom_delta != 1.0 {
-            ctx.set_pixels_per_point(ctx.pixels_per_point() * zoom_delta);
-        }
-
-        ctx.input(|i| {
-            if i.key_pressed(egui::Key::ArrowUp) {
-                let all_views = ChartView::all();
-                if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
-                    let new_pos = if pos == 0 { all_views.len() - 1 } else { pos - 1 };
-                    self.current_view = all_views[new_pos];
-                    self.config.ui.default_chart = self.current_view.to_string();
-                    let _ = self.config.save();
-                }
-            }
-            if i.key_pressed(egui::Key::ArrowDown) {
-                let all_views = ChartView::all();
-                if let Some(pos) = all_views.iter().position(|&v| v == self.current_view) {
-                    let new_pos = (pos + 1) % all_views.len();
-                    self.current_view = all_views[new_pos];
-                    self.config.ui.default_chart = self.current_view.to_string();
-                    let _ = self.config.save();
-                }
-            }
-            if i.key_pressed(egui::Key::Escape) {
-                self.heatmap_state.selection_start = None;
-                self.heatmap_state.selection_end = None;
-            }
-        });
-    }
 }
 
 impl eframe::App for PgeAnalyzerApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [0.0, 0.0, 0.0, 0.0] // Deep transparency
+        [0.0, 0.0, 0.0, 0.0] // Transparent
     }
 
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // 0. Ensure style transparency
-        ctx.style_mut(|style| style.visuals.window_fill = egui::Color32::TRANSPARENT);
-
-        if self.first_frame {
+        // Enforce theme on startup or if egui resets it (e.g. system theme change)
+        if ctx.style().visuals.window_fill != egui::Color32::TRANSPARENT {
             ui::apply_custom_style(ctx, self.config.ui.dark_mode);
-            self.first_frame = false;
         }
 
-        // Responsive scaling & Window State
-        let current_ppp = ctx.pixels_per_point();
-        let screen_rect = ctx.screen_rect();
-        let physical_width = screen_rect.width() * current_ppp;
-        let auto_scale = (physical_width / 1400.0).clamp(0.6, 2.0);
-        let final_scale = auto_scale * self.config.ui.font_scale;
-
-        if (final_scale - current_ppp).abs() > 0.05 {
-            ctx.set_pixels_per_point(final_scale);
-        }
-
-        let available = ctx.available_rect();
-        self.config.window.width = available.width() as f32;
-        self.config.window.height = available.height() as f32;
-        let _ = self.config.save();
-
-        self.handle_input(ctx);
-        ui::handle_window_resize(ctx, &mut self.resize_state);
-
-        // 1. Paint the main window background manually
+        // 1. Paint the main window background manually on the background layer
         let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
         let rounding = if is_maximized { 0.0 } else { ui::styles::WINDOW_ROUNDING };
         let bg_color = ui::actual_window_background(ctx);
@@ -375,6 +315,7 @@ impl eframe::App for PgeAnalyzerApp {
             bg_color,
         );
 
+        // 2. Add a border stroke if not maximized
         if !is_maximized {
             ctx.layer_painter(egui::LayerId::background()).rect_stroke(
                 ctx.screen_rect(),
@@ -382,6 +323,8 @@ impl eframe::App for PgeAnalyzerApp {
                 ctx.style().visuals.widgets.noninteractive.bg_stroke,
             );
         }
+
+        ui::handle_window_resize(ctx, &mut self.resize_state);
 
         // --- Custom Panels (Transparent) ---
         ui::render_title_bar(ctx, "PG&E Usage Analyzer");

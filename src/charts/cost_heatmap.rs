@@ -17,6 +17,7 @@ pub fn render_cost_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatmap
         monthly_sums: &data.monthly_cost_sums,
         yearly_sums: &data.yearly_cost_sums,
         daily_sum_width: 80.0,
+        max_value_override: Some(2.0),
     };
 
     render_heatmap_component(ui, &dates, &heatmap_data, state, config);

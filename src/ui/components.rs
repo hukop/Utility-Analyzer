@@ -46,7 +46,7 @@ pub fn render_collapsible_header(
 
     // Draw Icon (⏵/⏷)
     if config.show_icon {
-        let icon = if config.is_collapsed { "⏵" } else { "⏷" };
+        let icon = if config.is_collapsed { " >" } else { " v" };
         ui.painter().text(
             rect.left_center() + vec2(styles::MONTH_TOGGLE_OFFSET, 0.0),
             Align2::LEFT_CENTER,

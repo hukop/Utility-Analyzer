@@ -17,6 +17,7 @@ pub fn render_daily_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatma
         monthly_sums: &data.monthly_kwh_sums,
         yearly_sums: &data.yearly_kwh_sums,
         daily_sum_width: 80.0,
+        max_value_override: Some(6.0),
     };
 
     render_heatmap_component(ui, &dates, &heatmap_data, state, config);

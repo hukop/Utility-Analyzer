@@ -19,8 +19,8 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
         .cloned()
         .fold(0.0_f64, f64::max);
 
-    ui.heading("Export Sparklines (6:00–18:00)");
-    ui.label("Mini line charts showing solar export by hour (6–18) for each day. Click month headers to collapse/expand.");
+    ui.heading("Export Sparklines (6:00-18:00)");
+    ui.label("Mini line charts showing solar export by hour (6-18) for each day. Click month headers to collapse/expand.");
     ui.add_space(crate::ui::styles::CHART_SPACING);
 
     let sparkline_width = 200.0;
@@ -245,14 +245,14 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
                 // Tooltip showing hourly breakdown
                 if spark_response.hovered() {
                     spark_response.on_hover_ui(|ui| {
-                        ui.label(date_str.to_string());
+                        ui.label(egui::RichText::new(date_str.to_string()).strong());
                         ui.separator();
                         for (i, &val) in day_export.iter().enumerate() {
                             let hour = i + 6;
-                            ui.label(format!("{:02}:00 → {:.2} kWh", hour, val));
+                            ui.label(egui::RichText::new(format!("{:2}:00 -> {:6.2} kWh", hour, val)).monospace());
                         }
                         ui.separator();
-                        ui.label(format!("Total: {:.2} kWh", day_sum));
+                        ui.label(egui::RichText::new(format!("Total: {:.2} kWh", day_sum)).strong());
                     });
                 }
 

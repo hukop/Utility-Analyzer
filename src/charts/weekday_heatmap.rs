@@ -32,6 +32,7 @@ pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heat
         monthly_sums: &std::collections::HashMap::new(),
         yearly_sums: &std::collections::HashMap::new(),
         daily_sum_width: 0.0,
+        max_value_override: Some(6.0),
     };
 
     render_heatmap_component(ui, &dates, &heatmap_data, state, config);
