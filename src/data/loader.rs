@@ -1,4 +1,5 @@
 use anyhow::{Context, Result};
+use csv::ReaderBuilder;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::{Path, PathBuf};
@@ -54,6 +55,28 @@ pub fn autodetect_csv_files(dir: &Path, pattern: &str) -> Vec<PathBuf> {
     } else {
         Vec::new()
     }
+}
+
+/// Iterates over all records in multiple CSV strings.
+///
+/// Handler receives (headers, record).
+pub fn for_each_record<F>(csv_contents: &[String], mut handler: F) -> Result<()>
+where
+    F: FnMut(&csv::StringRecord, &csv::StringRecord) -> Result<()>,
+{
+    for content in csv_contents {
+        let mut reader = ReaderBuilder::new()
+            .has_headers(true)
+            .flexible(true)
+            .from_reader(content.as_bytes());
+
+        let headers = reader.headers()?.clone();
+        for result in reader.records() {
+            let record = result?;
+            handler(&headers, &record)?;
+        }
+    }
+    Ok(())
 }
 
 /// Opens a native file dialog to let the user select a CSV file.

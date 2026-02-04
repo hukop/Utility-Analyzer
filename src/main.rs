@@ -63,36 +63,14 @@ impl Default for PgeAnalyzerApp {
 
 impl PgeAnalyzerApp {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
-        let config = Config::load().unwrap_or_else(|e| {
-            eprintln!("Warning: Failed to load config, using defaults: {}", e);
-            Config::default()
-        });
+        let mut app = Self::default();
+        ui::apply_custom_style(&cc.egui_ctx, app.config.ui.dark_mode);
 
-        ui::apply_custom_style(&cc.egui_ctx, config.ui.dark_mode);
-
-        let mut heatmap_state = charts::HeatmapState::default();
-        if let Some(ref p) = config.ui.heatmap_palette {
-            heatmap_state.palette = charts::HeatmapPalette::from_name(p);
-        }
-
-        let mut app = Self {
-            config: config.clone(),
-            electric_data: None,
-            gas_data: None,
-            current_view: ChartView::from_str(&config.ui.default_chart),
-            error_message: None,
-            data_dir: config.get_data_dir(),
-            heatmap_state,
-            resize_state: ui::WindowResizeState::new(),
-            last_sync_pos: None,
-            last_sync_size: None,
-            last_sync_maximized: config.window.maximized,
-            sync_timer: 0.0,
-        };
+        // Re-read maximized state for viewport
+        app.last_sync_maximized = app.config.window.maximized;
 
         // Try to auto-load data
         app.auto_load_data();
-
         app
     }
 
@@ -118,43 +96,25 @@ impl PgeAnalyzerApp {
         }
     }
 
-    fn load_electric_data(&mut self, primary_path: &Path) -> Result<()> {
-        let parent_dir = primary_path.parent().unwrap_or(Path::new("."));
-        let files = data::autodetect_csv_files(parent_dir, "pge_electric");
-
-        // Ensure primary_path is first in the list if it's among the matches
-        let mut sorted_files = vec![primary_path.to_path_buf()];
-        for f in files {
-            if f != primary_path {
-                sorted_files.push(f);
-            }
-        }
-
-        let mut contents = Vec::new();
-        for path in sorted_files {
-            if let Ok(content) = data::read_csv_with_header(&path) {
-                contents.push(content);
-            }
-        }
-
+    fn load_electric_data(&mut self, path: &Path) -> Result<()> {
+        let contents = self.read_merged_csvs(path, "pge_electric")?;
         self.electric_data = Some(ElectricData::load(&contents)?);
-
-        // Save to config
-        self.config.last_electric_file = Some(primary_path.to_path_buf());
-        if let Some(parent) = primary_path.parent() {
-            self.config.default_data_dir = Some(parent.to_path_buf());
-            self.data_dir = parent.to_path_buf();
-        }
-        let _ = self.config.save();
-
+        self.save_data_paths(path, true);
         Ok(())
     }
 
-    fn load_gas_data(&mut self, primary_path: &Path) -> Result<()> {
-        let parent_dir = primary_path.parent().unwrap_or(Path::new("."));
-        let files = data::autodetect_csv_files(parent_dir, "pge_natural_gas");
+    fn load_gas_data(&mut self, path: &Path) -> Result<()> {
+        let contents = self.read_merged_csvs(path, "pge_natural_gas")?;
+        self.gas_data = Some(GasData::load(&contents)?);
+        self.save_data_paths(path, false);
+        Ok(())
+    }
 
-        // Ensure primary_path is first in the list
+    /// Reads metadata-stripped contents for a primary file and all siblings matching the pattern.
+    fn read_merged_csvs(&self, primary_path: &Path, pattern: &str) -> Result<Vec<String>> {
+        let parent_dir = primary_path.parent().unwrap_or(Path::new("."));
+        let files = data::autodetect_csv_files(parent_dir, pattern);
+
         let mut sorted_files = vec![primary_path.to_path_buf()];
         for f in files {
             if f != primary_path {
@@ -168,18 +128,22 @@ impl PgeAnalyzerApp {
                 contents.push(content);
             }
         }
+        Ok(contents)
+    }
 
-        self.gas_data = Some(GasData::load(&contents)?);
+    /// Updates configuration with last used file and data directory.
+    fn save_data_paths(&mut self, path: &Path, is_electric: bool) {
+        if is_electric {
+            self.config.last_electric_file = Some(path.to_path_buf());
+        } else {
+            self.config.last_gas_file = Some(path.to_path_buf());
+        }
 
-        // Save to config
-        self.config.last_gas_file = Some(primary_path.to_path_buf());
-        if let Some(parent) = primary_path.parent() {
+        if let Some(parent) = path.parent() {
             self.config.default_data_dir = Some(parent.to_path_buf());
             self.data_dir = parent.to_path_buf();
         }
         let _ = self.config.save();
-
-        Ok(())
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {

@@ -1,6 +1,5 @@
 use egui::Ui;
 use crate::charts::HeatmapState;
-use chrono::Datelike;
 
 pub struct HeatmapConfig<'a> {
     pub title: String,
@@ -193,37 +192,18 @@ pub fn render_heatmap_component(
                         egui::Sense::hover(),
                     );
 
-                    let date_parsed = chrono::NaiveDate::parse_from_str(label, "%Y-%m-%d").ok();
-                    let is_weekend = if config.show_weekend_emphasis {
-                        if let Some(d) = date_parsed {
-                            d.weekday() == chrono::Weekday::Sat || d.weekday() == chrono::Weekday::Sun
-                        } else {
-                            false
-                        }
-                    } else {
-                        false
-                    };
-
-                    let label_text = if let Some(d) = date_parsed {
-                        format!("{}", d.format("%Y-%m-%d %a"))
-                    } else {
-                        label.clone()
-                    };
+                    let is_weekend = config.show_weekend_emphasis && crate::ui::UiUtils::is_weekend(label);
 
                     ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
                         if is_weekend {
-                            ui.painter().rect_filled(rect, 0.0, crate::ui::styles::weekend_bg(ui.visuals().dark_mode));
+                            ui.painter().rect_filled(rect, 0.0, crate::ui::UiUtils::weekend_bg(ui.visuals().dark_mode));
                         }
 
-                        let mut text = egui::RichText::new(label_text);
-                        if is_weekend {
-                            text = text.size(crate::ui::styles::MONTH_HEADER_FONT_SIZE - 1.0)
-                                .strong()
-                                .color(crate::ui::styles::weekend_text(ui.visuals().dark_mode));
+                        let text = if is_weekend {
+                             crate::ui::UiUtils::styled_date_label(label, ui.visuals().dark_mode)
                         } else {
-                            text = text.size(crate::ui::styles::BODY_FONT_SIZE)
-                                .color(ui.visuals().text_color());
-                        }
+                             egui::RichText::new(label.clone()).size(crate::ui::styles::BODY_FONT_SIZE).color(ui.visuals().text_color())
+                        };
 
                         if config.show_weekend_emphasis {
                             ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
@@ -448,11 +428,11 @@ pub fn render_heatmap_component(
                         continue;
                     }
 
-                    let date_parsed = chrono::NaiveDate::parse_from_str(label, "%Y-%m-%d").ok();
-                    let (is_sat, is_sun) = if let Some(d) = date_parsed {
-                        (d.weekday() == chrono::Weekday::Sat, d.weekday() == chrono::Weekday::Sun)
+                    let is_weekend = crate::ui::UiUtils::is_weekend(label);
+                    let (is_sat, is_sun) = if is_weekend {
+                        (label.contains("Sat") || label == "Saturday", label.contains("Sun") || label == "Sunday")
                     } else {
-                        (label == "Saturday", label == "Sunday")
+                        (false, false)
                     };
 
                     let x_start = content_start_pos.x;

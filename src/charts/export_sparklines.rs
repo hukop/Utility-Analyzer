@@ -1,7 +1,6 @@
 use egui::Ui;
 use crate::data::ElectricData;
 use crate::charts::HeatmapState;
-use chrono::Datelike;
 
 /// Renders the export sparklines chart showing mini line charts of solar export
 /// for each day from 6:00 to 18:00, with daily sums and collapsible months.
@@ -165,45 +164,29 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
             let day_export = &export_data[day_idx];
             let day_sum = daily_sums[day_idx];
 
-            // Parse date for weekday info
-            let date_parsed = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d").ok();
-            let is_weekend = if let Some(d) = date_parsed {
-                d.weekday() == chrono::Weekday::Sat || d.weekday() == chrono::Weekday::Sun
-            } else {
-                false
-            };
+            let is_weekend = crate::ui::UiUtils::is_weekend(date_str);
 
             ui.horizontal(|ui| {
                 ui.spacing_mut().item_spacing = egui::vec2(4.0, 0.0);
 
                 // Date label
-                let date_label = if let Some(d) = date_parsed {
-                    format!("{}", d.format("%Y-%m-%d %a"))
-                } else {
-                    date_str.clone()
-                };
-
                 let (label_rect, _) = ui.allocate_exact_size(
                     egui::vec2(date_label_width, row_height),
                     egui::Sense::hover(),
                 );
 
                 if is_weekend {
-                    ui.painter().rect_filled(label_rect, 0.0, crate::ui::styles::weekend_bg(ui.visuals().dark_mode));
+                    ui.painter().rect_filled(label_rect, 0.0, crate::ui::UiUtils::weekend_bg(ui.visuals().dark_mode));
                 }
 
-                let text_color = if is_weekend {
-                    crate::ui::styles::weekend_text(ui.visuals().dark_mode)
-                } else {
-                    ui.visuals().text_color()
-                };
+                let (label, color) = crate::ui::UiUtils::date_label_parts(date_str, ui.visuals().dark_mode);
 
                 ui.painter().text(
                     label_rect.left_center() + egui::vec2(5.0, 0.0),
                     egui::Align2::LEFT_CENTER,
-                    date_label,
+                    label,
                     egui::FontId::proportional(crate::ui::styles::BODY_FONT_SIZE),
-                    text_color
+                    color.unwrap_or(ui.visuals().text_color())
                 );
 
                 // Sparkline

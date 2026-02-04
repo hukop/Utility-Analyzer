@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, NaiveDate, Utc};
-use csv::ReaderBuilder;
+use chrono::{DateTime, Utc};
 use std::collections::HashMap;
 
 /// A single data point representing gas usage cost on a specific date.
@@ -28,60 +27,40 @@ impl GasData {
     /// dates, the firstOccurrence preference is given.
     pub fn load(csv_contents: &[String]) -> Result<Self> {
         let mut merged_data: std::collections::BTreeMap<DateTime<Utc>, GasDataPoint> = std::collections::BTreeMap::new();
+        let mut col_indices = None;
 
-        for csv_content in csv_contents {
-            let mut reader = ReaderBuilder::new()
-                .has_headers(true)
-                .flexible(true)
-                .from_reader(csv_content.as_bytes());
-
-            // Get headers to find column indices
-            let headers = reader.headers()?.clone();
-
-            // Find column indices
-            let type_idx = headers.iter().position(|h| h == "TYPE")
-                .context("TYPE column not found")?;
-            let date_idx = headers.iter().position(|h| h == "DATE")
-                .context("DATE column not found")?;
-            let cost_idx = headers.iter().position(|h| h == "COST")
-                .context("COST column not found")?;
-
-            for result in reader.records() {
-                let record = result?;
-
-                // Get TYPE field
-                let type_field = record.get(type_idx)
-                    .context("Missing TYPE field")?;
-
-                // Filter to natural gas usage only
-                if !type_field.contains("Natural gas usage") {
-                    continue;
-                }
-
-                // Parse date
-                let date_str = record.get(date_idx).context("Missing DATE field")?;
-                let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-                    .or_else(|_| NaiveDate::parse_from_str(date_str, "%m/%d/%Y"))
-                    .with_context(|| format!("Failed to parse date: {}", date_str))?;
-
-                let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(
-                    date.and_hms_opt(0, 0, 0).unwrap(), Utc);
-
-                // If we already have this date, skip it (prefer first file)
-                if merged_data.contains_key(&timestamp) {
-                    continue;
-                }
-
-                // Parse cost
-                let cost_str = record.get(cost_idx).context("Missing COST field")?;
-                let cost: f64 = cost_str.trim_start_matches('$').parse().context("Failed to parse cost")?;
-
-                merged_data.insert(timestamp, GasDataPoint {
-                    date: timestamp,
-                    cost,
-                });
+        super::loader::for_each_record(csv_contents, |headers, record| {
+            if col_indices.is_none() {
+                col_indices = Some((
+                    headers.iter().position(|h| h == "TYPE").context("TYPE column missing")?,
+                    headers.iter().position(|h| h == "DATE").context("DATE column missing")?,
+                    headers.iter().position(|h| h == "COST").context("COST column missing")?,
+                ));
             }
-        }
+
+            let (type_i, date_i, cost_i) = col_indices.unwrap();
+
+            if !record.get(type_i).map(|s| s.contains("Natural gas usage")).unwrap_or(false) {
+                return Ok(());
+            }
+
+            let date_str = record.get(date_i).context("DATE field missing")?;
+            let date = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+                .or_else(|_| chrono::NaiveDate::parse_from_str(date_str, "%m/%d/%Y"))
+                .with_context(|| format!("Failed to parse date: {}", date_str))?;
+
+            let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(
+                date.and_hms_opt(0, 0, 0).unwrap(), Utc);
+
+            if merged_data.contains_key(&timestamp) {
+                return Ok(());
+            }
+
+            let cost: f64 = record.get(cost_i).context("COST missing")?.trim_start_matches('$').parse().context("Invalid cost")?;
+
+            merged_data.insert(timestamp, GasDataPoint { date: timestamp, cost });
+            Ok(())
+        })?;
 
         let data: Vec<GasDataPoint> = merged_data.into_values().collect();
         // BTreeMap is already sorted by date
@@ -101,10 +80,10 @@ impl GasData {
         let mut result: Vec<_> = daily
             .into_iter()
             .filter_map(|(date, cost)| {
-                NaiveDate::parse_from_str(&date, "%Y-%m-%d")
+                chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
                     .ok()
-                    .and_then(|d| d.and_hms_opt(0, 0, 0))
-                    .map(|dt| (dt.and_utc(), cost))
+                    .and_then(|d: chrono::NaiveDate| d.and_hms_opt(0, 0, 0))
+                    .map(|dt: chrono::NaiveDateTime| (dt.and_utc(), cost))
             })
             .collect();
 

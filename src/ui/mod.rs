@@ -1,8 +1,10 @@
 pub mod styles;
 pub mod components;
 pub mod window;
+pub mod utils;
 
 pub use styles::*;
+pub use utils::UiUtils;
 pub use window::{WindowResizeState, handle_window_resize, render_title_bar};
 
 

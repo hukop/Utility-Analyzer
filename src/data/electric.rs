@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
-use csv::ReaderBuilder;
 use std::collections::HashMap;
 
 /// A single data point representing electric usage at a specific time.
@@ -46,82 +45,46 @@ impl ElectricData {
     /// files in the list is preserved).
     pub fn load(csv_contents: &[String]) -> Result<Self> {
         let mut merged_data: std::collections::BTreeMap<DateTime<Utc>, ElectricDataPoint> = std::collections::BTreeMap::new();
+        let mut col_indices = None;
 
-        for csv_content in csv_contents {
-            let mut reader = ReaderBuilder::new()
-                .has_headers(true)
-                .flexible(true)
-                .from_reader(csv_content.as_bytes());
-
-            // Get headers to find column indices
-            let headers = reader.headers()?.clone();
-
-            // Find column indices
-            let type_idx = headers.iter().position(|h| h == "TYPE")
-                .context("TYPE column not found")?;
-            let date_idx = headers.iter().position(|h| h == "DATE")
-                .context("DATE column not found")?;
-            let start_time_idx = headers.iter().position(|h| h == "START TIME")
-                .context("START TIME column not found")?;
-            let kwh_idx = headers.iter().position(|h| h == "IMPORT (kWh)")
-                .context("IMPORT (kWh) column not found")?;
-            let cost_idx = headers.iter().position(|h| h == "TOTAL IMPORT COST");
-            let export_idx = headers.iter().position(|h| h == "EXPORT (kWh)");
-
-            for result in reader.records() {
-                let record = result?;
-
-                // Get TYPE field
-                let type_field = record.get(type_idx)
-                    .context("Missing TYPE field")?;
-
-                // Filter to electric usage only
-                if !type_field.contains("Electric usage") {
-                    continue;
-                }
-
-                // Parse date and time
-                let date_str = record.get(date_idx).context("Missing DATE field")?;
-                let time_str = record.get(start_time_idx).context("Missing START TIME field")?;
-
-                let dt = NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%Y-%m-%d %H:%M")
-                    .or_else(|_| NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%m/%d/%Y %H:%M"))
-                    .with_context(|| format!("Failed to parse date/time: {} {}", date_str, time_str))?;
-
-                let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc);
-
-                // If we already have this timestamp, skip it (prefer first file)
-                if merged_data.contains_key(&timestamp) {
-                    continue;
-                }
-
-                // Parse usage (kWh)
-                let kwh_str = record.get(kwh_idx).context("Missing kWh field")?;
-                let kwh: f64 = kwh_str.parse().context("Failed to parse kWh")?;
-
-                // Parse cost (optional)
-                let cost = if let Some(idx) = cost_idx {
-                    let cost_str = record.get(idx).unwrap_or("$0.00");
-                    cost_str.trim_start_matches('$').parse::<f64>().unwrap_or(0.0)
-                } else {
-                    0.0
-                };
-
-                // Parse export (optional)
-                let export_kwh = if let Some(idx) = export_idx {
-                    record.get(idx).unwrap_or("0.0").parse::<f64>().unwrap_or(0.0)
-                } else {
-                    0.0
-                };
-
-                merged_data.insert(timestamp, ElectricDataPoint {
-                    timestamp,
-                    kwh,
-                    cost,
-                    export_kwh,
-                });
+        super::loader::for_each_record(csv_contents, |headers, record| {
+            if col_indices.is_none() {
+                col_indices = Some((
+                    headers.iter().position(|h| h == "TYPE").context("TYPE column missing")?,
+                    headers.iter().position(|h| h == "DATE").context("DATE column missing")?,
+                    headers.iter().position(|h| h == "START TIME").context("START TIME column missing")?,
+                    headers.iter().position(|h| h == "IMPORT (kWh)").context("IMPORT column missing")?,
+                    headers.iter().position(|h| h == "TOTAL IMPORT COST"),
+                    headers.iter().position(|h| h == "EXPORT (kWh)"),
+                ));
             }
-        }
+
+            let (type_i, date_i, time_i, kwh_i, cost_i, export_i) = col_indices.unwrap();
+
+            if !record.get(type_i).map(|s| s.contains("Electric usage")).unwrap_or(false) {
+                return Ok(());
+            }
+
+            let date_str = record.get(date_i).context("DATE field missing")?;
+            let time_str = record.get(time_i).context("TIME field missing")?;
+
+            let dt = NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%Y-%m-%d %H:%M")
+                .or_else(|_| NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%m/%d/%Y %H:%M"))
+                .with_context(|| format!("Failed to parse date/time: {} {}", date_str, time_str))?;
+
+            let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc);
+
+            if merged_data.contains_key(&timestamp) {
+                return Ok(());
+            }
+
+            let kwh: f64 = record.get(kwh_i).context("kWh missing")?.parse().context("Invalid kWh")?;
+            let cost = cost_i.and_then(|i| record.get(i)).map(|s| s.trim_start_matches('$').parse().unwrap_or(0.0)).unwrap_or(0.0);
+            let export_kwh = export_i.and_then(|i| record.get(i)).map(|s| s.parse().unwrap_or(0.0)).unwrap_or(0.0);
+
+            merged_data.insert(timestamp, ElectricDataPoint { timestamp, kwh, cost, export_kwh });
+            Ok(())
+        })?;
 
         let data: Vec<ElectricDataPoint> = merged_data.into_values().collect();
 
