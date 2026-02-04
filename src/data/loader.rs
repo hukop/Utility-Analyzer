@@ -30,8 +30,8 @@ pub fn read_csv_with_header(path: &Path) -> Result<String> {
     Ok(lines[header_idx..].join("\n"))
 }
 
-/// Automatically finds the first CSV file in the given directory that matches the pattern.
-pub fn autodetect_csv(dir: &Path, pattern: &str) -> Option<PathBuf> {
+/// Automatically finds all CSV files in the given directory that match the pattern.
+pub fn autodetect_csv_files(dir: &Path, pattern: &str) -> Vec<PathBuf> {
     if let Ok(entries) = std::fs::read_dir(dir) {
         let mut matches: Vec<PathBuf> = entries
             .filter_map(|e| e.ok())
@@ -50,9 +50,9 @@ pub fn autodetect_csv(dir: &Path, pattern: &str) -> Option<PathBuf> {
             .collect();
 
         matches.sort();
-        matches.into_iter().next()
+        matches
     } else {
-        None
+        Vec::new()
     }
 }
 

@@ -85,34 +85,51 @@ impl PgeAnalyzerApp {
     }
 
     fn auto_load_data(&mut self) {
-        // 1. Try last used electric CSV from config
-        let electric_path = self.config.last_electric_file.clone()
-            .or_else(|| data::autodetect_csv(&self.data_dir, "pge_electric"));
-
-        if let Some(path) = electric_path {
-            if let Err(e) = self.load_electric_data(&path) {
-                eprintln!("Failed to auto-load electric data from {:?}: {}", path, e);
+        // 1. Load electric CSVs
+        let electric_files = data::autodetect_csv_files(&self.data_dir, "pge_electric");
+        if !electric_files.is_empty() {
+            // If the user has a "last electric file" in config, we might want to prioritize it?
+            // User said: "In case the date/time ranges are overlapping only take the data from the first file."
+            // We'll use alphabetical order for now, or if they have a last used file, we could put it first.
+            // Let's just use all matching files in the directory.
+            if let Err(e) = self.load_electric_data(&electric_files[0]) {
+                eprintln!("Failed to auto-load electric data: {}", e);
             }
         }
 
-        // 2. Try last used gas CSV from config
-        let gas_path = self.config.last_gas_file.clone()
-            .or_else(|| data::autodetect_csv(&self.data_dir, "pge_natural_gas"));
-
-        if let Some(path) = gas_path {
-            if let Err(e) = self.load_gas_data(&path) {
-                eprintln!("Failed to auto-load gas data from {:?}: {}", path, e);
+        // 2. Load gas CSVs
+        let gas_files = data::autodetect_csv_files(&self.data_dir, "pge_natural_gas");
+        if !gas_files.is_empty() {
+            if let Err(e) = self.load_gas_data(&gas_files[0]) {
+                eprintln!("Failed to auto-load gas data: {}", e);
             }
         }
     }
 
-    fn load_electric_data(&mut self, path: &Path) -> Result<()> {
-        let csv_content = data::read_csv_with_header(path)?;
-        self.electric_data = Some(ElectricData::load(&csv_content)?);
+    fn load_electric_data(&mut self, primary_path: &Path) -> Result<()> {
+        let parent_dir = primary_path.parent().unwrap_or(Path::new("."));
+        let files = data::autodetect_csv_files(parent_dir, "pge_electric");
+
+        // Ensure primary_path is first in the list if it's among the matches
+        let mut sorted_files = vec![primary_path.to_path_buf()];
+        for f in files {
+            if f != primary_path {
+                sorted_files.push(f);
+            }
+        }
+
+        let mut contents = Vec::new();
+        for path in sorted_files {
+            if let Ok(content) = data::read_csv_with_header(&path) {
+                contents.push(content);
+            }
+        }
+
+        self.electric_data = Some(ElectricData::load(&contents)?);
 
         // Save to config
-        self.config.last_electric_file = Some(path.to_path_buf());
-        if let Some(parent) = path.parent() {
+        self.config.last_electric_file = Some(primary_path.to_path_buf());
+        if let Some(parent) = primary_path.parent() {
             self.config.default_data_dir = Some(parent.to_path_buf());
             self.data_dir = parent.to_path_buf();
         }
@@ -121,13 +138,30 @@ impl PgeAnalyzerApp {
         Ok(())
     }
 
-    fn load_gas_data(&mut self, path: &Path) -> Result<()> {
-        let csv_content = data::read_csv_with_header(path)?;
-        self.gas_data = Some(GasData::load(&csv_content)?);
+    fn load_gas_data(&mut self, primary_path: &Path) -> Result<()> {
+        let parent_dir = primary_path.parent().unwrap_or(Path::new("."));
+        let files = data::autodetect_csv_files(parent_dir, "pge_natural_gas");
+
+        // Ensure primary_path is first in the list
+        let mut sorted_files = vec![primary_path.to_path_buf()];
+        for f in files {
+            if f != primary_path {
+                sorted_files.push(f);
+            }
+        }
+
+        let mut contents = Vec::new();
+        for path in sorted_files {
+            if let Ok(content) = data::read_csv_with_header(&path) {
+                contents.push(content);
+            }
+        }
+
+        self.gas_data = Some(GasData::load(&contents)?);
 
         // Save to config
-        self.config.last_gas_file = Some(path.to_path_buf());
-        if let Some(parent) = path.parent() {
+        self.config.last_gas_file = Some(primary_path.to_path_buf());
+        if let Some(parent) = primary_path.parent() {
             self.config.default_data_dir = Some(parent.to_path_buf());
             self.data_dir = parent.to_path_buf();
         }

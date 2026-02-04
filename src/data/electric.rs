@@ -36,112 +36,132 @@ pub struct ElectricData {
 }
 
 impl ElectricData {
-    /// Loads electric usage data from a CSV string.
+    /// Loads electric usage data from one or more CSV strings.
     ///
     /// Expects a specific PGE export format with columns like "TYPE", "DATE",
     /// "START TIME", and "IMPORT (kWh)".
-    pub fn load(csv_content: &str) -> Result<Self> {
-        let mut reader = ReaderBuilder::new()
-            .has_headers(true)
-            .flexible(true)
-            .from_reader(csv_content.as_bytes());
+    ///
+    /// If multiple CSVs are provided, data is merged. In case of overlapping
+    /// timestamps, the firstOccurrence preference is given (data from earlier
+    /// files in the list is preserved).
+    pub fn load(csv_contents: &[String]) -> Result<Self> {
+        let mut merged_data: std::collections::BTreeMap<DateTime<Utc>, ElectricDataPoint> = std::collections::BTreeMap::new();
 
-        // Get headers to find column indices
-        let headers = reader.headers()?.clone();
+        for csv_content in csv_contents {
+            let mut reader = ReaderBuilder::new()
+                .has_headers(true)
+                .flexible(true)
+                .from_reader(csv_content.as_bytes());
 
-        // Find column indices
-        let type_idx = headers.iter().position(|h| h == "TYPE")
-            .context("TYPE column not found")?;
-        let date_idx = headers.iter().position(|h| h == "DATE")
-            .context("DATE column not found")?;
-        let start_time_idx = headers.iter().position(|h| h == "START TIME")
-            .context("START TIME column not found")?;
-        let kwh_idx = headers.iter().position(|h| h == "IMPORT (kWh)")
-            .context("IMPORT (kWh) column not found")?;
-        let cost_idx = headers.iter().position(|h| h == "TOTAL IMPORT COST");
-        let export_idx = headers.iter().position(|h| h == "EXPORT (kWh)");
+            // Get headers to find column indices
+            let headers = reader.headers()?.clone();
 
-        let mut data = Vec::new();
-        let mut monthly_kwh_sums = HashMap::new();
-        let mut monthly_cost_sums = HashMap::new();
-        let mut monthly_export_sums = HashMap::new();
-        let mut yearly_kwh_sums = HashMap::new();
-        let mut yearly_cost_sums = HashMap::new();
-        let mut yearly_export_sums = HashMap::new();
+            // Find column indices
+            let type_idx = headers.iter().position(|h| h == "TYPE")
+                .context("TYPE column not found")?;
+            let date_idx = headers.iter().position(|h| h == "DATE")
+                .context("DATE column not found")?;
+            let start_time_idx = headers.iter().position(|h| h == "START TIME")
+                .context("START TIME column not found")?;
+            let kwh_idx = headers.iter().position(|h| h == "IMPORT (kWh)")
+                .context("IMPORT (kWh) column not found")?;
+            let cost_idx = headers.iter().position(|h| h == "TOTAL IMPORT COST");
+            let export_idx = headers.iter().position(|h| h == "EXPORT (kWh)");
 
-        for result in reader.records() {
-            let record = result?;
+            for result in reader.records() {
+                let record = result?;
 
-            // Get TYPE field
-            let type_field = record.get(type_idx)
-                .context("Missing TYPE field")?;
+                // Get TYPE field
+                let type_field = record.get(type_idx)
+                    .context("Missing TYPE field")?;
 
-            // Filter to electric usage only
-            if !type_field.contains("Electric usage") {
-                continue;
+                // Filter to electric usage only
+                if !type_field.contains("Electric usage") {
+                    continue;
+                }
+
+                // Parse date and time
+                let date_str = record.get(date_idx).context("Missing DATE field")?;
+                let time_str = record.get(start_time_idx).context("Missing START TIME field")?;
+
+                let dt = NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%Y-%m-%d %H:%M")
+                    .or_else(|_| NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%m/%d/%Y %H:%M"))
+                    .with_context(|| format!("Failed to parse date/time: {} {}", date_str, time_str))?;
+
+                let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc);
+
+                // If we already have this timestamp, skip it (prefer first file)
+                if merged_data.contains_key(&timestamp) {
+                    continue;
+                }
+
+                // Parse usage (kWh)
+                let kwh_str = record.get(kwh_idx).context("Missing kWh field")?;
+                let kwh: f64 = kwh_str.parse().context("Failed to parse kWh")?;
+
+                // Parse cost (optional)
+                let cost = if let Some(idx) = cost_idx {
+                    let cost_str = record.get(idx).unwrap_or("$0.00");
+                    cost_str.trim_start_matches('$').parse::<f64>().unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+
+                // Parse export (optional)
+                let export_kwh = if let Some(idx) = export_idx {
+                    record.get(idx).unwrap_or("0.0").parse::<f64>().unwrap_or(0.0)
+                } else {
+                    0.0
+                };
+
+                merged_data.insert(timestamp, ElectricDataPoint {
+                    timestamp,
+                    kwh,
+                    cost,
+                    export_kwh,
+                });
             }
+        }
 
-            // Parse date and time
-            let date_str = record.get(date_idx).context("Missing DATE field")?;
-            let time_str = record.get(start_time_idx).context("Missing START TIME field")?;
+        let data: Vec<ElectricDataPoint> = merged_data.into_values().collect();
 
-            let dt = NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%Y-%m-%d %H:%M")
-                .or_else(|_| NaiveDateTime::parse_from_str(&format!("{} {}", date_str, time_str), "%m/%d/%Y %H:%M"))
-                .with_context(|| format!("Failed to parse date/time: {} {}", date_str, time_str))?;
+        let mut self_obj = Self {
+            data,
+            monthly_kwh_sums: HashMap::new(),
+            monthly_cost_sums: HashMap::new(),
+            monthly_export_sums: HashMap::new(),
+            yearly_kwh_sums: HashMap::new(),
+            yearly_cost_sums: HashMap::new(),
+            yearly_export_sums: HashMap::new(),
+        };
 
-            let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc);
+        self_obj.recalculate_summaries();
 
-            // Parse usage (kWh)
-            let kwh_str = record.get(kwh_idx).context("Missing kWh field")?;
-            let kwh: f64 = kwh_str.parse().context("Failed to parse kWh")?;
+        Ok(self_obj)
+    }
 
-            // Parse cost (optional)
-            let cost = if let Some(idx) = cost_idx {
-                let cost_str = record.get(idx).unwrap_or("$0.00");
-                cost_str.trim_start_matches('$').parse::<f64>().unwrap_or(0.0)
-            } else {
-                0.0
-            };
+    /// Recalculates all monthly and yearly sums based on existing data.
+    fn recalculate_summaries(&mut self) {
+        self.monthly_kwh_sums.clear();
+        self.monthly_cost_sums.clear();
+        self.monthly_export_sums.clear();
+        self.yearly_kwh_sums.clear();
+        self.yearly_cost_sums.clear();
+        self.yearly_export_sums.clear();
 
-            // Parse export (optional)
-            let export_kwh = if let Some(idx) = export_idx {
-                record.get(idx).unwrap_or("0.0").parse::<f64>().unwrap_or(0.0)
-            } else {
-                0.0
-            };
-
-            // Update monthly and yearly sums
+        for point in &self.data {
+            let dt = point.timestamp.naive_utc();
             let month_key = dt.format("%Y-%m").to_string();
             let year_key = dt.format("%Y").to_string();
 
-            *monthly_kwh_sums.entry(month_key.clone()).or_insert(0.0) += kwh;
-            *monthly_cost_sums.entry(month_key.clone()).or_insert(0.0) += cost;
-            *monthly_export_sums.entry(month_key).or_insert(0.0) += export_kwh;
+            *self.monthly_kwh_sums.entry(month_key.clone()).or_insert(0.0) += point.kwh;
+            *self.monthly_cost_sums.entry(month_key.clone()).or_insert(0.0) += point.cost;
+            *self.monthly_export_sums.entry(month_key).or_insert(0.0) += point.export_kwh;
 
-            *yearly_kwh_sums.entry(year_key.clone()).or_insert(0.0) += kwh;
-            *yearly_cost_sums.entry(year_key.clone()).or_insert(0.0) += cost;
-            *yearly_export_sums.entry(year_key).or_insert(0.0) += export_kwh;
-
-            data.push(ElectricDataPoint {
-                timestamp,
-                kwh,
-                cost,
-                export_kwh,
-            });
+            *self.yearly_kwh_sums.entry(year_key.clone()).or_insert(0.0) += point.kwh;
+            *self.yearly_cost_sums.entry(year_key.clone()).or_insert(0.0) += point.cost;
+            *self.yearly_export_sums.entry(year_key).or_insert(0.0) += point.export_kwh;
         }
-
-        // Sort data by timestamp
-        data.sort_by_key(|p| p.timestamp);
-
-        Ok(Self {
-            data,
-            monthly_kwh_sums,
-            monthly_cost_sums,
-            monthly_export_sums,
-            yearly_kwh_sums,
-            yearly_cost_sums,
-            yearly_export_sums,
-        })
     }
 
     /// Get daily totals
@@ -319,9 +339,9 @@ mod tests {
     fn test_electric_data_load() {
         let csv = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
                   Electric usage,2023-01-01,00:00,1.5,$0.30\n\
-                  Electric usage,2023-01-01,01:00,2.0,$0.40";
+                  Electric usage,2023-01-01,01:00,2.0,$0.40".to_string();
 
-        let result = ElectricData::load(csv).unwrap();
+        let result = ElectricData::load(&[csv]).unwrap();
         assert_eq!(result.data.len(), 2);
         assert_eq!(result.data[0].kwh, 1.5);
         assert_eq!(result.data[0].cost, 0.30);
@@ -330,9 +350,9 @@ mod tests {
     #[test]
     fn test_electric_data_load_alternate_date_format() {
         let csv = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
-                  Electric usage,01/01/2023,00:00,1.5,$0.30";
+                  Electric usage,01/01/2023,00:00,1.5,$0.30".to_string();
 
-        let result = ElectricData::load(csv).unwrap();
+        let result = ElectricData::load(&[csv]).unwrap();
         assert_eq!(result.data.len(), 1);
         assert_eq!(result.data[0].kwh, 1.5);
     }
@@ -342,9 +362,9 @@ mod tests {
         let csv = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
                   Electric usage,2023-01-01,00:00,1.0,$0.20\n\
                   Electric usage,2023-01-02,00:00,2.0,$0.40\n\
-                  Electric usage,2023-02-01,00:00,3.0,$0.60";
+                  Electric usage,2023-02-01,00:00,3.0,$0.60".to_string();
 
-        let result = ElectricData::load(csv).unwrap();
+        let result = ElectricData::load(&[csv]).unwrap();
 
         let jan_kwh = result.monthly_kwh_sums.get("2023-01").unwrap();
         let jan_cost = result.monthly_cost_sums.get("2023-01").unwrap();
@@ -355,5 +375,21 @@ mod tests {
         assert!((jan_cost - 0.60).abs() < 1e-10);
         assert!((feb_kwh - 3.0).abs() < 1e-10);
         assert!((feb_cost - 0.60).abs() < 1e-10);
+    }
+
+    #[test]
+    fn test_electric_data_merge() {
+        let csv1 = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
+                   Electric usage,2023-01-01,00:00,1.0,$0.20".to_string();
+        let csv2 = "TYPE,DATE,START TIME,IMPORT (kWh),TOTAL IMPORT COST\n\
+                   Electric usage,2023-01-01,00:00,5.0,$1.00\n\
+                   Electric usage,2023-01-01,01:00,2.0,$0.40".to_string();
+
+        let result = ElectricData::load(&[csv1, csv2]).unwrap();
+
+        // Should have 2 points, and the first point should be from csv1 (1.0 kWh)
+        assert_eq!(result.data.len(), 2);
+        assert_eq!(result.data[0].kwh, 1.0);
+        assert_eq!(result.data[1].kwh, 2.0);
     }
 }
