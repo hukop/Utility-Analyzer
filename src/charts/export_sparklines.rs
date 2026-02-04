@@ -23,10 +23,13 @@ pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut He
     ui.label("Mini line charts showing solar export by hour (6-18) for each day. Click month headers to collapse/expand.");
     ui.add_space(crate::ui::styles::CHART_SPACING);
 
-    let sparkline_width = 200.0;
-    let row_height = 28.0;
     let date_label_width = 120.0;
     let sum_label_width = 80.0;
+    let padding = 20.0; // Extra padding for scrollbar/margins
+    let available_width = ui.available_width();
+    let sparkline_width = (available_width - date_label_width - sum_label_width - padding).max(100.0);
+
+    let row_height = 28.0;
 
     egui::ScrollArea::both().show(ui, |ui| {
         let mut last_month = String::new();

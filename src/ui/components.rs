@@ -112,7 +112,10 @@ impl Card {
                 bottom: outer_margin,
             })
             .inner_margin(inner_padding)
-            .show(ui, add_contents)
+            .show(ui, |ui| {
+                ui.set_min_width(ui.available_width());
+                add_contents(ui)
+            })
             .inner
     }
 }

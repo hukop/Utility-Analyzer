@@ -24,6 +24,10 @@ struct PgeAnalyzerApp {
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
     resize_state: ui::WindowResizeState,
+    last_sync_pos: Option<egui::Pos2>,
+    last_sync_size: Option<egui::Vec2>,
+    last_sync_maximized: bool,
+    sync_timer: f32,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -49,6 +53,10 @@ impl Default for PgeAnalyzerApp {
             data_dir,
             heatmap_state,
             resize_state: ui::WindowResizeState::new(),
+            last_sync_pos: None,
+            last_sync_size: None,
+            last_sync_maximized: false,
+            sync_timer: 0.0,
         }
     }
 }
@@ -76,6 +84,10 @@ impl PgeAnalyzerApp {
             data_dir: config.get_data_dir(),
             heatmap_state,
             resize_state: ui::WindowResizeState::new(),
+            last_sync_pos: None,
+            last_sync_size: None,
+            last_sync_maximized: config.window.maximized,
+            sync_timer: 0.0,
         };
 
         // Try to auto-load data
@@ -325,6 +337,62 @@ impl PgeAnalyzerApp {
             }
         }
     }
+
+    fn handle_window_persistence(&mut self, ctx: &egui::Context) {
+        let (pos, size, maximized) = ctx.input(|i| {
+            let info = i.viewport();
+            (
+                info.outer_rect.map(|r| r.min),
+                info.inner_rect.map(|r| r.size()),
+                info.maximized.unwrap_or(false),
+            )
+        });
+
+        let mut changed = false;
+
+        if maximized != self.last_sync_maximized {
+            self.last_sync_maximized = maximized;
+            self.config.window.maximized = maximized;
+            changed = true;
+        }
+
+        // Only track size/pos if not maximized
+        if !maximized {
+            if pos != self.last_sync_pos {
+                if let Some(p) = pos {
+                    // Filter out coordinate junk (e.g. -32000 on minimize)
+                    if p.x > -10000.0 && p.y > -10000.0 {
+                        self.last_sync_pos = pos;
+                        self.config.window.x = Some(p.x);
+                        self.config.window.y = Some(p.y);
+                        changed = true;
+                    }
+                }
+            }
+
+            if size != self.last_sync_size {
+                if let Some(s) = size {
+                    if s.x > 10.0 && s.y > 10.0 {
+                        self.last_sync_size = size;
+                        self.config.window.width = s.x;
+                        self.config.window.height = s.y;
+                        changed = true;
+                    }
+                }
+            }
+        }
+
+        if changed {
+            self.sync_timer = 1.0; // Reset settle timer (1 second)
+        } else if self.sync_timer > 0.0 {
+            self.sync_timer -= ctx.input(|i| i.stable_dt);
+            if self.sync_timer <= 0.0 {
+                let _ = self.config.save();
+                self.sync_timer = 0.0;
+            }
+            ctx.request_repaint(); // Keep updating until timer hits zero
+        }
+    }
 }
 
 impl eframe::App for PgeAnalyzerApp {
@@ -383,7 +451,7 @@ impl eframe::App for PgeAnalyzerApp {
                     left: 10.0,
                     right: 10.0,
                     top: 0.0,
-                    bottom: 0.0,
+                    bottom: 10.0,
                 }))
             .show(ctx, |ui| {
                 ui.add_space(10.0);
@@ -391,6 +459,7 @@ impl eframe::App for PgeAnalyzerApp {
             });
 
         self.resize_state.apply_cursor(ctx);
+        self.handle_window_persistence(ctx);
     }
 }
 
@@ -427,6 +496,10 @@ fn run_app() -> Result<(), eframe::Error> {
         .with_decorations(false)
         .with_transparent(true)
         .with_min_inner_size([400.0, 300.0]);
+
+    if let (Some(x), Some(y)) = (config.window.x, config.window.y) {
+        viewport = viewport.with_position([x, y]);
+    }
 
     if config.window.maximized {
         viewport = viewport.with_maximized(true);
