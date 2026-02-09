@@ -398,7 +398,7 @@ impl eframe::App for PgeAnalyzerApp {
         egui::SidePanel::left("sidebar_panel")
             .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
             .resizable(false)
-            .default_width(200.0)
+            .default_width(150.0)
             .show(ctx, |ui| {
                 ui.add_space(20.0); // Space for top rounding
                 egui::Frame::none()
