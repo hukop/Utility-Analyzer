@@ -28,6 +28,7 @@ struct PgeAnalyzerApp {
     last_sync_size: Option<egui::Vec2>,
     last_sync_maximized: bool,
     sync_timer: f32,
+    zoom_state: charts::ChartZoomState,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -57,6 +58,7 @@ impl Default for PgeAnalyzerApp {
             last_sync_size: None,
             last_sync_maximized: false,
             sync_timer: 0.0,
+            zoom_state: charts::ChartZoomState::default(),
         }
     }
 }
@@ -237,7 +239,7 @@ impl PgeAnalyzerApp {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Daily kWh");
                     ui::components::Card::new().show(ui, |ui| {
-                        charts::render_daily_kwh(ui, data);
+                        charts::render_daily_kwh(ui, data, &mut self.zoom_state);
                     });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -293,7 +295,7 @@ impl PgeAnalyzerApp {
                 if let Some(ref data) = self.gas_data {
                     ui.heading("Gas: Daily Usage (USD)");
                     ui::components::Card::new().show(ui, |ui| {
-                        charts::render_gas_daily(ui, data);
+                        charts::render_gas_daily(ui, data, &mut self.zoom_state);
                     });
                 } else {
                     ui.label("No gas data loaded. Please load a CSV file.");
