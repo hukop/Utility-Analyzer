@@ -376,19 +376,12 @@ impl eframe::App for PgeAnalyzerApp {
         let bg_color = ui::actual_window_background(ctx);
 
         ctx.layer_painter(egui::LayerId::background()).rect_filled(
-            ctx.screen_rect(),
-            egui::Rounding::same(rounding),
+            ctx.content_rect(),
+            egui::CornerRadius::same(rounding as u8),
             bg_color,
         );
 
-        // 2. Add a border stroke if not maximized
-        if !is_maximized {
-            ctx.layer_painter(egui::LayerId::background()).rect_stroke(
-                ctx.screen_rect(),
-                egui::Rounding::same(rounding),
-                ctx.style().visuals.widgets.noninteractive.bg_stroke,
-            );
-        }
+        // 2. Border stroke removed - custom title bar handles visual boundaries
 
         ui::handle_window_resize(ctx, &mut self.resize_state);
 
@@ -396,26 +389,26 @@ impl eframe::App for PgeAnalyzerApp {
         ui::render_title_bar(ctx, "PG&E Usage Analyzer");
 
         egui::SidePanel::left("sidebar_panel")
-            .frame(egui::Frame::none().fill(egui::Color32::TRANSPARENT))
+            .frame(egui::Frame::NONE.fill(egui::Color32::TRANSPARENT))
             .resizable(false)
             .default_width(150.0)
             .show(ctx, |ui| {
                 ui.add_space(20.0); // Space for top rounding
-                egui::Frame::none()
-                    .inner_margin(egui::Margin::symmetric(10.0, 0.0))
+                egui::Frame::NONE
+                    .inner_margin(egui::Margin::symmetric(10, 0))
                     .show(ui, |ui| {
                         self.render_sidebar(ui);
                     });
             });
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::none()
+            .frame(egui::Frame::NONE
                 .fill(egui::Color32::TRANSPARENT)
                 .inner_margin(egui::Margin {
-                    left: 10.0,
-                    right: 10.0,
-                    top: 0.0,
-                    bottom: 10.0,
+                    left: 10,
+                    right: 10,
+                    top: 0,
+                    bottom: 10,
                 }))
             .show(ctx, |ui| {
                 ui.add_space(10.0);

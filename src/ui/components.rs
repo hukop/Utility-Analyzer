@@ -98,17 +98,17 @@ impl Card {
 
     pub fn show<R>(self, ui: &mut Ui, add_contents: impl FnOnce(&mut Ui) -> R) -> R {
         // Use smaller fixed margins instead of borrowing widget spacing
-        let outer_margin = 8.0;
-        let inner_padding = 10.0;
+        let outer_margin: i8 = 8;
+        let inner_padding: i8 = 10;
 
-        egui::Frame::none()
+        egui::Frame::NONE
             .fill(ui.visuals().panel_fill)
-            .rounding(ui.visuals().widgets.noninteractive.rounding)
+            .corner_radius(ui.visuals().widgets.noninteractive.corner_radius)
             .stroke(ui.visuals().widgets.noninteractive.bg_stroke)
             .outer_margin(egui::Margin {
-                left: 0.0,    // No extra left margin (CentralPanel handles it)
+                left: 0,    // No extra left margin (CentralPanel handles it)
                 right: outer_margin,
-                top: 0.0,
+                top: 0,
                 bottom: outer_margin,
             })
             .inner_margin(inner_padding)

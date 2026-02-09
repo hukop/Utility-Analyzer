@@ -14,10 +14,9 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
         .map(|(hour, kwh)| [hour as f64, *kwh])
         .collect();
 
-    let line = Line::new(points)
+    let line = Line::new("Average Usage (kWh)", points)
         .color(egui::Color32::from_rgb(31, 119, 180)) // Standard blue
-        .width(2.0)
-        .name("Average Usage (kWh)");
+        .width(2.0);
 
     // Convert to plot points for export
     let export_points: PlotPoints = export_profile
@@ -26,10 +25,9 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
         .map(|(hour, kwh)| [hour as f64, *kwh])
         .collect();
 
-    let export_line = Line::new(export_points)
+    let export_line = Line::new("Average Export (kWh)", export_points)
         .color(egui::Color32::from_rgb(220, 180, 0)) // Solar yellow
-        .width(2.0)
-        .name("Average Export (kWh)");
+        .width(2.0);
 
     Plot::new("hourly_profile_plot")
         .view_aspect(2.0)
@@ -65,7 +63,7 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
             // Manually draw dashed vertical grid lines
             for i in 0..=23 {
                 plot_ui.vline(
-                    egui_plot::VLine::new(i as f64)
+                    egui_plot::VLine::new(format!("grid_{}", i), i as f64)
                         .style(egui_plot::LineStyle::Dashed{length: 5.0})
                         .color(egui::Color32::from_gray(200)), // Subtle grid color
                 );

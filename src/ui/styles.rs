@@ -36,10 +36,10 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
         visuals.widgets.active.fg_stroke = egui::Stroke::new(1.0, egui::Color32::WHITE);
 
         // Rounded corners (modern feel)
-        visuals.widgets.noninteractive.rounding = egui::Rounding::same(4.0);
-        visuals.widgets.inactive.rounding = egui::Rounding::same(4.0);
-        visuals.widgets.hovered.rounding = egui::Rounding::same(4.0);
-        visuals.widgets.active.rounding = egui::Rounding::same(4.0);
+        visuals.widgets.noninteractive.corner_radius = egui::CornerRadius::same(4);
+        visuals.widgets.inactive.corner_radius = egui::CornerRadius::same(4);
+        visuals.widgets.hovered.corner_radius = egui::CornerRadius::same(4);
+        visuals.widgets.active.corner_radius = egui::CornerRadius::same(4);
 
         style.visuals = visuals;
     });

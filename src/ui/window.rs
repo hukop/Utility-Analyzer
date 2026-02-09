@@ -93,7 +93,7 @@ pub fn handle_window_resize(ctx: &egui::Context, state: &mut WindowResizeState) 
         (pos, pressed, down)
     });
 
-    let window_rect = ctx.screen_rect();
+    let window_rect = ctx.content_rect();
 
     let Some(pointer_pos) = pointer_pos else {
         if !primary_down {
@@ -246,9 +246,9 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
 
     egui::TopBottomPanel::top("title_bar")
         .exact_height(CUSTOM_TITLE_BAR_HEIGHT)
-        .frame(egui::Frame::none()
+        .frame(egui::Frame::NONE
             .fill(egui::Color32::TRANSPARENT)
-            .inner_margin(0.0))
+            .inner_margin(0))
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.horizontal(|ui| {
@@ -301,14 +301,14 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                     }
 
                     if response.hovered() {
-                        let window_rounding = if is_maximized { 0.0 } else { crate::ui::styles::WINDOW_ROUNDING };
+                        let window_rounding = if is_maximized { 0 } else { crate::ui::styles::WINDOW_ROUNDING as u8 };
                         ui.painter().rect_filled(
                             rect,
-                            egui::Rounding {
-                                nw: 0.0,
+                            egui::CornerRadius {
+                                nw: 0,
                                 ne: window_rounding,
-                                sw: 0.0,
-                                se: 0.0,
+                                sw: 0,
+                                se: 0,
                             },
                             egui::Color32::from_rgb(196, 43, 28),
                         );

@@ -80,7 +80,7 @@ pub fn render_heatmap_component(
 
         egui::ScrollArea::horizontal()
             .id_salt("header_scroll_ignore")
-            .enable_scrolling(false)
+            .scroll_bar_visibility(egui::scroll_area::ScrollBarVisibility::AlwaysHidden)
             .horizontal_scroll_offset(state.scroll_offset)
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
@@ -194,9 +194,9 @@ pub fn render_heatmap_component(
 
                     let is_weekend = config.show_weekend_emphasis && crate::ui::UiUtils::is_weekend(label);
 
-                    ui.allocate_new_ui(egui::UiBuilder::new().max_rect(rect), |ui| {
+                    ui.scope_builder(egui::UiBuilder::new().max_rect(rect), |ui| {
                         if is_weekend {
-                            ui.painter().rect_filled(rect, 0.0, crate::ui::UiUtils::weekend_bg(ui.visuals().dark_mode));
+                            ui.painter().rect_filled(rect, 0, crate::ui::UiUtils::weekend_bg(ui.visuals().dark_mode));
                         }
 
                         let text = if is_weekend {
@@ -395,7 +395,7 @@ pub fn render_heatmap_component(
                 }
 
                 if let Some(rect) = selection_rect {
-                    ui.painter().rect_stroke(rect, 0.0, egui::Stroke::new(2.0, egui::Color32::WHITE));
+                    ui.painter().rect_stroke(rect, egui::CornerRadius::ZERO, egui::Stroke::new(2.0, egui::Color32::WHITE), egui::StrokeKind::Middle);
                 }
 
                 // Final pass: Draw weekend boundaries OVER everything
@@ -465,8 +465,8 @@ pub fn render_heatmap_component(
                     egui::Frame::default()
                         .fill(egui::Color32::from_black_alpha(240))
                         .stroke(egui::Stroke::new(1.0, egui::Color32::WHITE))
-                        .rounding(4.0)
-                        .inner_margin(6.0)
+                        .corner_radius(4)
+                        .inner_margin(6)
                         .show(ui, |ui| {
                             ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
                             ui.label(egui::RichText::new("SELECTION").size(10.0).color(egui::Color32::LIGHT_GRAY));

@@ -18,10 +18,9 @@ pub fn render_gas_daily(ui: &mut Ui, data: &GasData) {
         .map(|(dt, cost)| [dt.timestamp() as f64, *cost])
         .collect();
 
-    let line = Line::new(points)
+    let line = Line::new("Daily Cost ($)", points)
         .color(crate::ui::styles::primary_chart_color())
-        .width(2.0)
-        .name("Daily Cost ($)");
+        .width(2.0);
 
     // Calculate 7-day rolling average
     let smoothed = crate::charts::calculate_rolling_average(&daily, 7);
@@ -30,15 +29,14 @@ pub fn render_gas_daily(ui: &mut Ui, data: &GasData) {
         .map(|(dt, cost)| [dt.timestamp() as f64, *cost])
         .collect();
 
-    let smooth_line = Line::new(smooth_points)
+    let smooth_line = Line::new("7-day average", smooth_points)
         .color(crate::ui::styles::average_chart_color())
         .width(2.0)
-        .style(egui_plot::LineStyle::Dashed { length: 10.0 })
-        .name("7-day average");
+        .style(egui_plot::LineStyle::Dashed { length: 10.0 });
 
     let first_timestamp = daily.first().map(|(dt, _)| dt.timestamp() as f64).unwrap_or(0.0);
     let last_timestamp = daily.last().map(|(dt, _)| dt.timestamp() as f64).unwrap_or(1.0);
-    
+
     ScrollArea::both()
         .auto_shrink([false; 2])
         .show(ui, |ui| {
