@@ -4,13 +4,23 @@ use crate::data::ElectricData;
 use egui::Ui;
 
 pub fn render_cost_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut HeatmapState) {
+    render_cost_heatmap_with_selection_label(ui, data, state, "");
+}
+
+pub(crate) fn render_cost_heatmap_with_selection_label(
+    ui: &mut Ui,
+    data: &ElectricData,
+    state: &mut HeatmapState,
+    selection_label: &'static str,
+) {
     let (dates, heatmap_data) = data.daily_hour_cost_heatmap_cached();
 
     let config = HeatmapConfig {
         id: "daily_cost_heatmap",
         title: "Daily Cost ($) Heatmap: Day (rows) vs Hour (columns)",
+        show_title: false,
         unit: "$",
-        selection_label: "Click and drag to select a range to view total Cost",
+        selection_label,
         show_weekend_emphasis: true,
         x_label_interval: 1,
         y_label_width: 100.0,

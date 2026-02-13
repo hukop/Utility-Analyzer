@@ -33,6 +33,7 @@ pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heat
     let config = HeatmapConfig {
         id: "weekday_heatmap",
         title: "Average kWh by Weekday and Hour",
+        show_title: true,
         unit: "kWh",
         selection_label: "Click and drag to select a range to view total kWh",
         show_weekend_emphasis: false,

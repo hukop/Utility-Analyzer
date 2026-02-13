@@ -5,6 +5,7 @@ use egui::Ui;
 pub struct HeatmapConfig<'a> {
     pub id: &'a str,
     pub title: &'a str,
+    pub show_title: bool,
     pub unit: &'a str,
     pub selection_label: &'a str,
     pub show_weekend_emphasis: bool,
@@ -39,7 +40,9 @@ pub fn render_heatmap_component(
             .fold(f64::MIN, f64::max)
     });
 
-    ui.heading(config.title);
+    if config.show_title {
+        ui.heading(config.title);
+    }
 
     let available_width = ui.available_width();
     let reserved_width = config.y_label_width + config.daily_sum_width + 20.0;
@@ -73,8 +76,10 @@ pub fn render_heatmap_component(
         show_selection_info = true;
     }
 
-    ui.label(config.selection_label);
-    ui.add_space(crate::ui::styles::CHART_SPACING);
+    if !config.selection_label.is_empty() {
+        ui.label(config.selection_label);
+        ui.add_space(crate::ui::styles::CHART_SPACING);
+    }
 
     ui.horizontal(|ui| {
         ui.spacing_mut().item_spacing = egui::vec2(0.0, 0.0);
