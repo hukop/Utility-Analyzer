@@ -1,12 +1,11 @@
-pub mod styles;
 pub mod components;
-pub mod window;
+pub mod styles;
 pub mod utils;
+pub mod window;
 
 pub use styles::*;
 pub use utils::UiUtils;
-pub use window::{WindowResizeState, handle_window_resize, render_title_bar};
-
+pub use window::{handle_window_resize, render_title_bar, WindowResizeState};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ChartView {
@@ -25,8 +24,7 @@ pub enum HeatmapMetric {
     Cost,
 }
 
-impl HeatmapMetric {
-}
+impl HeatmapMetric {}
 
 impl ChartView {
     pub fn from_str(s: &str) -> Self {

@@ -1,12 +1,17 @@
 use crate::charts::HeatmapState;
-use crate::data::ElectricData;
+use crate::data::{DateRangePreset, ElectricData};
 use egui::Ui;
 
 /// Renders the export sparklines chart showing mini line charts of solar export
 /// for each day from 6:00 to 18:00, with daily sums and collapsible months.
-pub fn render_export_sparklines(ui: &mut Ui, data: &ElectricData, state: &mut HeatmapState) {
+pub fn render_export_sparklines(
+    ui: &mut Ui,
+    data: &ElectricData,
+    state: &mut HeatmapState,
+    range_preset: DateRangePreset,
+) {
     let (dates, export_data, daily_sums, max_val, date_meta) =
-        data.daily_daytime_export_data_cached();
+        data.daily_daytime_export_data_filtered(range_preset);
 
     if dates.is_empty() {
         ui.label("No export data available");

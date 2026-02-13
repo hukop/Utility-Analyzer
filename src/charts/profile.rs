@@ -1,6 +1,6 @@
 use crate::data::ElectricData;
 use egui::Ui;
-use egui_plot::{Line, Plot, PlotPoints, GridMark};
+use egui_plot::{GridMark, Line, Plot, PlotPoints};
 
 pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
     ui.add_space(crate::ui::styles::CHART_SPACING);
@@ -58,17 +58,22 @@ pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
             marks
         })
         .show(ui, |plot_ui| {
-             // Re-drawing dashed grid lines (manually for all hours)
-             let max_val = profile.iter().chain(export_profile.iter()).copied().fold(0.0, f64::max).max(0.1);
-             let y_limit = max_val * 1.2;
+            // Re-drawing dashed grid lines (manually for all hours)
+            let max_val = profile
+                .iter()
+                .chain(export_profile.iter())
+                .copied()
+                .fold(0.0, f64::max)
+                .max(0.1);
+            let y_limit = max_val * 1.2;
 
-             for i in 0..=23 {
+            for i in 0..=23 {
                 let x = i as f64;
                 plot_ui.line(
                     egui_plot::Line::new("", vec![[x, 0.0], [x, y_limit]])
                         .style(egui_plot::LineStyle::Dashed { length: 5.0 })
                         .color(egui::Color32::from_gray(100))
-                        .width(1.0)
+                        .width(1.0),
                 );
             }
 

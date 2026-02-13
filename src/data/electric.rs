@@ -2,6 +2,40 @@ use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, NaiveDate, NaiveDateTime, Timelike, Utc, Weekday};
 use egui_plot::PlotPoint;
 use std::collections::{BTreeMap, HashMap};
+use std::ops::Range;
+
+/// UI quick-range presets for filtering date-oriented charts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum DateRangePreset {
+    Days7,
+    Days30,
+    Days90,
+    Ytd,
+    #[default]
+    All,
+}
+
+impl DateRangePreset {
+    pub fn all() -> &'static [Self] {
+        &[
+            Self::Days7,
+            Self::Days30,
+            Self::Days90,
+            Self::Ytd,
+            Self::All,
+        ]
+    }
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Days7 => "7D",
+            Self::Days30 => "30D",
+            Self::Days90 => "90D",
+            Self::Ytd => "YTD",
+            Self::All => "All",
+        }
+    }
+}
 
 /// A single data point representing electric usage at a specific time.
 #[derive(Debug, Clone)]
@@ -19,6 +53,8 @@ pub struct ElectricDataPoint {
 /// Precomputed date metadata for UI rendering.
 #[derive(Debug, Clone)]
 pub struct DailyDateMetadata {
+    /// Parsed date for filtering/range operations.
+    pub date: NaiveDate,
     /// Date key in YYYY-MM-DD format.
     pub date_key: String,
     /// Year key in YYYY format.
@@ -321,6 +357,7 @@ impl ElectricData {
         let date_key = date.format("%Y-%m-%d").to_string();
 
         DailyDateMetadata {
+            date,
             date_key: date_key.clone(),
             year_key: date.format("%Y").to_string(),
             month_key: date.format("%Y-%m").to_string(),
@@ -555,6 +592,26 @@ impl ElectricData {
         (dates, rows, sums, max_val, meta)
     }
 
+    fn range_from_meta(meta: &[DailyDateMetadata], preset: DateRangePreset) -> Range<usize> {
+        if meta.is_empty() || preset == DateRangePreset::All {
+            return 0..meta.len();
+        }
+
+        let latest = meta.last().map(|m| m.date).unwrap_or_else(|| meta[0].date);
+        let start_date = match preset {
+            DateRangePreset::Days7 => latest - chrono::Days::new(6),
+            DateRangePreset::Days30 => latest - chrono::Days::new(29),
+            DateRangePreset::Days90 => latest - chrono::Days::new(89),
+            DateRangePreset::Ytd => {
+                chrono::NaiveDate::from_ymd_opt(latest.year(), 1, 1).unwrap_or(latest)
+            }
+            DateRangePreset::All => meta[0].date,
+        };
+
+        let start_idx = meta.iter().position(|m| m.date >= start_date).unwrap_or(0);
+        start_idx..meta.len()
+    }
+
     /// Returns plot-ready points for daily charts without per-frame allocation.
     pub fn daily_plot_points_cached(&self) -> &[PlotPoint] {
         &self.daily_points_cache
@@ -590,53 +647,60 @@ impl ElectricData {
         &self.hourly_export_profile_cache
     }
 
-    /// Returns cached kWh heatmap without per-frame allocations.
-    pub fn daily_hour_heatmap_cached(&self) -> (&[String], &[Vec<f64>]) {
-        (
-            &self.daily_hour_heatmap_cache.0,
-            &self.daily_hour_heatmap_cache.1,
-        )
-    }
-
-    /// Returns cached kWh heatmap row sums.
-    pub fn daily_hour_heatmap_row_sums_cached(&self) -> &[f64] {
-        &self.daily_hour_heatmap_row_sums_cache
-    }
-
-    /// Returns cached metadata for kWh heatmap rows.
-    pub fn daily_hour_heatmap_meta_cached(&self) -> &[DailyDateMetadata] {
-        &self.daily_hour_heatmap_meta_cache
-    }
-
-    /// Returns cached cost heatmap without per-frame allocations.
-    pub fn daily_hour_cost_heatmap_cached(&self) -> (&[String], &[Vec<f64>]) {
-        (
-            &self.daily_hour_cost_heatmap_cache.0,
-            &self.daily_hour_cost_heatmap_cache.1,
-        )
-    }
-
-    /// Returns cached cost heatmap row sums.
-    pub fn daily_hour_cost_heatmap_row_sums_cached(&self) -> &[f64] {
-        &self.daily_hour_cost_heatmap_row_sums_cache
-    }
-
-    /// Returns cached metadata for cost heatmap rows.
-    pub fn daily_hour_cost_heatmap_meta_cached(&self) -> &[DailyDateMetadata] {
-        &self.daily_hour_cost_heatmap_meta_cache
-    }
-
-    /// Returns cached daytime export sparkline data without per-frame allocations.
-    pub fn daily_daytime_export_data_cached(
+    /// Returns filtered energy heatmap slices for a quick-range preset.
+    pub fn daily_hour_heatmap_filtered(
         &self,
-    ) -> (&[String], &[Vec<f64>], &[f64], f64, &[DailyDateMetadata]) {
+        preset: DateRangePreset,
+    ) -> (&[String], &[Vec<f64>], &[f64], &[DailyDateMetadata]) {
+        let range = Self::range_from_meta(&self.daily_hour_heatmap_meta_cache, preset);
         (
-            &self.daily_daytime_export_cache.0,
-            &self.daily_daytime_export_cache.1,
-            &self.daily_daytime_export_cache.2,
-            self.daily_daytime_export_max_cache,
-            &self.daily_daytime_export_meta_cache,
+            &self.daily_hour_heatmap_cache.0[range.clone()],
+            &self.daily_hour_heatmap_cache.1[range.clone()],
+            &self.daily_hour_heatmap_row_sums_cache[range.clone()],
+            &self.daily_hour_heatmap_meta_cache[range],
         )
+    }
+
+    /// Returns filtered cost heatmap slices for a quick-range preset.
+    pub fn daily_hour_cost_heatmap_filtered(
+        &self,
+        preset: DateRangePreset,
+    ) -> (&[String], &[Vec<f64>], &[f64], &[DailyDateMetadata]) {
+        let range = Self::range_from_meta(&self.daily_hour_cost_heatmap_meta_cache, preset);
+        (
+            &self.daily_hour_cost_heatmap_cache.0[range.clone()],
+            &self.daily_hour_cost_heatmap_cache.1[range.clone()],
+            &self.daily_hour_cost_heatmap_row_sums_cache[range.clone()],
+            &self.daily_hour_cost_heatmap_meta_cache[range],
+        )
+    }
+
+    /// Returns filtered daytime export slices for a quick-range preset.
+    pub fn daily_daytime_export_data_filtered(
+        &self,
+        preset: DateRangePreset,
+    ) -> (&[String], &[Vec<f64>], &[f64], f64, &[DailyDateMetadata]) {
+        let range = Self::range_from_meta(&self.daily_daytime_export_meta_cache, preset);
+        let rows = &self.daily_daytime_export_cache.1[range.clone()];
+        let max_val = rows
+            .iter()
+            .flat_map(|row| row.iter())
+            .copied()
+            .fold(0.0_f64, f64::max);
+
+        (
+            &self.daily_daytime_export_cache.0[range.clone()],
+            rows,
+            &self.daily_daytime_export_cache.2[range.clone()],
+            max_val,
+            &self.daily_daytime_export_meta_cache[range],
+        )
+    }
+
+    /// Returns daily totals filtered by quick-range preset for export.
+    pub fn daily_totals_filtered(&self, preset: DateRangePreset) -> Vec<(&DailyDateMetadata, f64)> {
+        let (_, _, sums, meta) = self.daily_hour_heatmap_filtered(preset);
+        meta.iter().zip(sums.iter().copied()).collect()
     }
 }
 

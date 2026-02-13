@@ -36,6 +36,7 @@ pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heat
         show_title: true,
         unit: "kWh",
         selection_label: "Click and drag to select a range to view total kWh",
+        show_legend: true,
         show_weekend_emphasis: false,
         x_label_interval: 2,
         y_label_width: 80.0,

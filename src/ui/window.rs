@@ -238,16 +238,17 @@ fn direction_to_cursor(direction: ResizeDirection) -> CursorIcon {
 /// Height of the custom title bar.
 pub const CUSTOM_TITLE_BAR_HEIGHT: f32 = 32.0;
 
-
 /// Render a custom title bar as a TopBottomPanel.
 pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
     let mut drag_initiated = false;
 
     egui::TopBottomPanel::top("title_bar")
         .exact_height(CUSTOM_TITLE_BAR_HEIGHT)
-        .frame(egui::Frame::NONE
-            .fill(egui::Color32::TRANSPARENT)
-            .inner_margin(0))
+        .frame(
+            egui::Frame::NONE
+                .fill(egui::Color32::TRANSPARENT)
+                .inner_margin(0),
+        )
         .show(ctx, |ui| {
             ui.spacing_mut().item_spacing.x = 0.0;
             ui.horizontal(|ui| {
@@ -291,7 +292,8 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                     let text_color = ui.visuals().text_color();
 
                     // 1. Close Button
-                    let (mut rect, response) = ui.allocate_exact_size(btn_size, egui::Sense::click());
+                    let (mut rect, response) =
+                        ui.allocate_exact_size(btn_size, egui::Sense::click());
 
                     // Slightly expand the hover area to perfectly touch the widow edge/stroke
                     if !is_maximized {
@@ -300,7 +302,11 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                     }
 
                     if response.hovered() {
-                        let window_rounding = if is_maximized { 0 } else { crate::ui::styles::WINDOW_ROUNDING as u8 };
+                        let window_rounding = if is_maximized {
+                            0
+                        } else {
+                            crate::ui::styles::WINDOW_ROUNDING as u8
+                        };
                         ui.painter().rect_filled(
                             rect,
                             egui::CornerRadius {
@@ -317,7 +323,11 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                         egui::Align2::CENTER_CENTER,
                         "X",
                         egui::FontId::proportional(12.0),
-                        if response.hovered() { egui::Color32::WHITE } else { text_color },
+                        if response.hovered() {
+                            egui::Color32::WHITE
+                        } else {
+                            text_color
+                        },
                     );
                     if response.clicked() {
                         ctx.send_viewport_cmd(egui::ViewportCommand::Close);
@@ -326,7 +336,8 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                     // 2. Maximize/Restore Button
                     let (rect, response) = ui.allocate_exact_size(btn_size, egui::Sense::click());
                     if response.hovered() {
-                        ui.painter().rect_filled(rect, 0.0, egui::Color32::from_gray(60));
+                        ui.painter()
+                            .rect_filled(rect, 0.0, egui::Color32::from_gray(60));
                     }
                     let max_icon = if is_maximized { "❐" } else { "□" };
                     ui.painter().text(
@@ -343,7 +354,8 @@ pub fn render_title_bar(ctx: &egui::Context, title: &str) -> bool {
                     // 3. Minimize Button
                     let (rect, response) = ui.allocate_exact_size(btn_size, egui::Sense::click());
                     if response.hovered() {
-                        ui.painter().rect_filled(rect, 0.0, egui::Color32::from_gray(60));
+                        ui.painter()
+                            .rect_filled(rect, 0.0, egui::Color32::from_gray(60));
                     }
                     ui.painter().text(
                         rect.center(),

@@ -10,8 +10,9 @@ mod data;
 mod ui;
 
 use anyhow::Result;
+use chrono::Utc;
 use config::Config;
-use data::{ElectricData, GasData};
+use data::{DateRangePreset, ElectricData, GasData};
 use std::path::{Path, PathBuf};
 use ui::{ChartView, HeatmapMetric};
 
@@ -37,6 +38,9 @@ struct PgeAnalyzerApp {
     last_sync_native_titlebar_dark: Option<bool>,
     sync_timer: f32,
     zoom_state: charts::ChartZoomState,
+    sidebar_collapsed: bool,
+    range_preset: DateRangePreset,
+    last_export_path: Option<PathBuf>,
 }
 
 impl Default for PgeAnalyzerApp {
@@ -71,6 +75,9 @@ impl Default for PgeAnalyzerApp {
             last_sync_native_titlebar_dark: None,
             sync_timer: 0.0,
             zoom_state: charts::ChartZoomState::default(),
+            sidebar_collapsed: false,
+            range_preset: DateRangePreset::default(),
+            last_export_path: None,
         }
     }
 }
@@ -160,86 +167,369 @@ impl PgeAnalyzerApp {
         let _ = self.config.save();
     }
 
+    fn pick_and_load_electric(&mut self) {
+        if let Some(path) = data::select_csv_file() {
+            match self.load_electric_data(&path) {
+                Ok(_) => {
+                    self.error_message = None;
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to load electric data: {}", e));
+                }
+            }
+        } else {
+            self.error_message =
+                Some("No file selected. Please choose an electric usage CSV file.".to_string());
+        }
+    }
+
+    fn pick_and_load_gas(&mut self) {
+        if let Some(path) = data::select_csv_file() {
+            match self.load_gas_data(&path) {
+                Ok(_) => {
+                    self.error_message = None;
+                }
+                Err(e) => {
+                    self.error_message = Some(format!("Failed to load gas data: {}", e));
+                }
+            }
+        } else {
+            self.error_message =
+                Some("No file selected. Please choose a gas usage CSV file.".to_string());
+        }
+    }
+
+    fn set_view(&mut self, view: ChartView) {
+        self.current_view = view;
+        self.config.ui.default_chart = view.to_string();
+        let _ = self.config.save();
+    }
+
+    fn view_icon(view: ChartView) -> (&'static str, egui::Color32, &'static str) {
+        match view {
+            ChartView::DailyKwh => ("📈", egui::Color32::from_rgb(80, 180, 255), "Daily Usage"),
+            ChartView::DailyHeatmap => {
+                ("⚡", egui::Color32::from_rgb(255, 210, 80), "Daily Heatmap")
+            }
+            ChartView::WeekdayHeatmap => {
+                ("📊", egui::Color32::from_rgb(120, 220, 170), "Weekday Avg")
+            }
+            ChartView::HourlyProfile => (
+                "🕒",
+                egui::Color32::from_rgb(190, 170, 255),
+                "Hourly Profile",
+            ),
+            ChartView::ExportSparklines => {
+                ("☀", egui::Color32::from_rgb(255, 190, 70), "Solar Export")
+            }
+            ChartView::GasDaily => ("🔥", egui::Color32::from_rgb(255, 120, 90), "Gas Usage"),
+        }
+    }
+
+    fn is_range_enabled_view(&self) -> bool {
+        matches!(
+            self.current_view,
+            ChartView::DailyHeatmap | ChartView::ExportSparklines
+        )
+    }
+
+    fn visible_range_label(&self) -> Option<String> {
+        let data = self.electric_data.as_ref()?;
+        match self.current_view {
+            ChartView::DailyHeatmap => {
+                if self.heatmap_metric == HeatmapMetric::Cost {
+                    let (_, _, _, meta) = data.daily_hour_cost_heatmap_filtered(self.range_preset);
+                    meta.first()
+                        .zip(meta.last())
+                        .map(|(start, end)| format!("{} to {}", start.date_key, end.date_key))
+                } else {
+                    let (_, _, _, meta) = data.daily_hour_heatmap_filtered(self.range_preset);
+                    meta.first()
+                        .zip(meta.last())
+                        .map(|(start, end)| format!("{} to {}", start.date_key, end.date_key))
+                }
+            }
+            ChartView::ExportSparklines => {
+                let (_, _, _, _, meta) = data.daily_daytime_export_data_filtered(self.range_preset);
+                meta.first()
+                    .zip(meta.last())
+                    .map(|(start, end)| format!("{} to {}", start.date_key, end.date_key))
+            }
+            _ => None,
+        }
+    }
+
+    fn export_visible_daily_csv(&self) -> Result<PathBuf> {
+        let Some(data) = self.electric_data.as_ref() else {
+            anyhow::bail!("No electric data loaded");
+        };
+
+        let timestamp = Utc::now().format("%Y%m%d_%H%M%S");
+        let preset = self.range_preset.label().to_lowercase();
+
+        let (filename, csv) = match self.current_view {
+            ChartView::DailyHeatmap if self.heatmap_metric == HeatmapMetric::Cost => {
+                let (_, _, sums, meta) = data.daily_hour_cost_heatmap_filtered(self.range_preset);
+                let mut content = String::from("date,total_cost_usd\n");
+                for (m, sum) in meta.iter().zip(sums.iter().copied()) {
+                    content.push_str(&format!("{},{:.4}\n", m.date_key, sum));
+                }
+                (
+                    format!("pge_daily_cost_{}_{}.csv", preset, timestamp),
+                    content,
+                )
+            }
+            ChartView::ExportSparklines => {
+                let (_, _, sums, _, meta) =
+                    data.daily_daytime_export_data_filtered(self.range_preset);
+                let mut content = String::from("date,daytime_export_kwh\n");
+                for (m, sum) in meta.iter().zip(sums.iter().copied()) {
+                    content.push_str(&format!("{},{:.4}\n", m.date_key, sum));
+                }
+                (format!("pge_export_{}_{}.csv", preset, timestamp), content)
+            }
+            _ => {
+                let mut content = String::from("date,total_kwh\n");
+                for (m, sum) in data.daily_totals_filtered(self.range_preset) {
+                    content.push_str(&format!("{},{:.4}\n", m.date_key, sum));
+                }
+                (
+                    format!("pge_daily_kwh_{}_{}.csv", preset, timestamp),
+                    content,
+                )
+            }
+        };
+
+        let output_path = self.data_dir.join(filename);
+        std::fs::write(&output_path, csv)?;
+        Ok(output_path)
+    }
+
+    fn render_command_bar(&mut self, ui: &mut egui::Ui) {
+        let frame_fill = ui.visuals().widgets.noninteractive.bg_fill;
+        let frame_stroke = ui.visuals().widgets.noninteractive.bg_stroke;
+
+        egui::Frame::NONE
+            .fill(frame_fill)
+            .stroke(frame_stroke)
+            .corner_radius(egui::CornerRadius::same(6))
+            .inner_margin(egui::Margin::symmetric(10, 8))
+            .show(ui, |ui| {
+                ui.horizontal(|ui| {
+                    let collapse_label = if self.sidebar_collapsed {
+                        "Expand Sidebar"
+                    } else {
+                        "Collapse Sidebar"
+                    };
+                    if ui.small_button(collapse_label).clicked() {
+                        self.sidebar_collapsed = !self.sidebar_collapsed;
+                    }
+
+                    ui.separator();
+                    ui.label(
+                        egui::RichText::new("Quick Range")
+                            .size(crate::ui::styles::BODY_FONT_SIZE)
+                            .strong(),
+                    );
+
+                    let range_enabled =
+                        self.is_range_enabled_view() && self.electric_data.is_some();
+                    ui.add_enabled_ui(range_enabled, |ui| {
+                        for preset in DateRangePreset::all() {
+                            ui.selectable_value(&mut self.range_preset, *preset, preset.label());
+                        }
+                    });
+
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let export_enabled =
+                            self.electric_data.is_some() && self.is_range_enabled_view();
+                        if ui
+                            .add_enabled(export_enabled, egui::Button::new("Export Visible CSV"))
+                            .clicked()
+                        {
+                            match self.export_visible_daily_csv() {
+                                Ok(path) => {
+                                    self.last_export_path = Some(path);
+                                    self.error_message = None;
+                                }
+                                Err(e) => {
+                                    self.error_message = Some(format!("Export failed: {}", e));
+                                }
+                            }
+                        }
+
+                        if let Some(path) = &self.last_export_path {
+                            ui.label(
+                                egui::RichText::new(format!("Last export: {}", path.display()))
+                                    .size(11.0)
+                                    .color(ui.visuals().text_color().gamma_multiply(0.7)),
+                            );
+                        }
+
+                        if let Some(label) = self.visible_range_label() {
+                            ui.separator();
+                            ui.label(
+                                egui::RichText::new(label)
+                                    .size(11.0)
+                                    .color(ui.visuals().text_color().gamma_multiply(0.8)),
+                            );
+                        }
+                    });
+                });
+            });
+    }
+
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
+        let toggle = if self.sidebar_collapsed { ">>" } else { "<<" };
+        if ui.small_button(toggle).clicked() {
+            self.sidebar_collapsed = !self.sidebar_collapsed;
+        }
+        ui.add_space(6.0);
+
+        if self.sidebar_collapsed {
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("⚡")
+                            .size(18.0)
+                            .color(egui::Color32::from_rgb(255, 210, 80)),
+                    )
+                    .min_size(egui::vec2(28.0, 24.0)),
+                )
+                .on_hover_text("Load electric CSV")
+                .clicked()
+            {
+                self.pick_and_load_electric();
+            }
+            if ui
+                .add(
+                    egui::Button::new(
+                        egui::RichText::new("🔥")
+                            .size(18.0)
+                            .color(egui::Color32::from_rgb(255, 120, 90)),
+                    )
+                    .min_size(egui::vec2(28.0, 24.0)),
+                )
+                .on_hover_text("Load gas CSV")
+                .clicked()
+            {
+                self.pick_and_load_gas();
+            }
+
+            ui.add_space(10.0);
+            let compact_views = [
+                ChartView::DailyKwh,
+                ChartView::DailyHeatmap,
+                ChartView::WeekdayHeatmap,
+                ChartView::HourlyProfile,
+                ChartView::ExportSparklines,
+                ChartView::GasDaily,
+            ];
+
+            for view in compact_views {
+                let (icon, color, tip) = Self::view_icon(view);
+                let response = ui.add(
+                    egui::Button::new(egui::RichText::new(icon).size(18.0).color(color))
+                        .selected(self.current_view == view)
+                        .min_size(egui::vec2(28.0, 24.0)),
+                );
+                if response.clicked() {
+                    self.set_view(view);
+                }
+                response.on_hover_text(tip);
+            }
+
+            ui.add_space(10.0);
+            let mut dark_mode = self.config.ui.dark_mode.unwrap_or(false);
+            if ui
+                .checkbox(&mut dark_mode, "")
+                .on_hover_text("Dark mode")
+                .changed()
+            {
+                self.config.ui.dark_mode = Some(dark_mode);
+                let _ = self.config.save();
+                ui::apply_custom_style(ui.ctx(), Some(dark_mode));
+            }
+            return;
+        }
+
         ui.label(
-            egui::RichText::new("Data Files:")
+            egui::RichText::new("Data Files")
                 .strong()
                 .size(crate::ui::styles::SIDEBAR_SECTION_SIZE)
                 .color(ui.visuals().text_color()),
         );
 
-        if ui.button("📂 Load Electric CSV").clicked() {
-            if let Some(path) = data::select_csv_file() {
-                match self.load_electric_data(&path) {
-                    Ok(_) => {
-                        self.error_message = None;
-                    }
-                    Err(e) => {
-                        self.error_message =
-                            Some(format!("⚠️ Failed to Load Electric Data\n\n{}", e));
-                    }
-                }
-            } else {
-                self.error_message = Some("ℹ️ No file selected\n\nPlease select a PG&E electric usage CSV file to continue.".to_string());
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("⚡")
+                    .size(18.0)
+                    .color(egui::Color32::from_rgb(255, 210, 80)),
+            );
+            if ui.button("Load Electric CSV").clicked() {
+                self.pick_and_load_electric();
             }
-        }
+        });
 
-        if ui.button("📂 Load Gas CSV").clicked() {
-            if let Some(path) = data::select_csv_file() {
-                match self.load_gas_data(&path) {
-                    Ok(_) => {
-                        self.error_message = None;
-                    }
-                    Err(e) => {
-                        self.error_message = Some(format!("⚠️ Failed to Load Gas Data\n\n{}", e));
-                    }
-                }
-            } else {
-                self.error_message = Some(
-                    "ℹ️ No file selected\n\nPlease select a PG&E gas usage CSV file to continue."
-                        .to_string(),
-                );
+        ui.horizontal(|ui| {
+            ui.label(
+                egui::RichText::new("🔥")
+                    .size(18.0)
+                    .color(egui::Color32::from_rgb(255, 120, 90)),
+            );
+            if ui.button("Load Gas CSV").clicked() {
+                self.pick_and_load_gas();
             }
-        }
+        });
 
-        ui.add_space(20.0);
+        ui.add_space(16.0);
         ui.label(
-            egui::RichText::new("Views:")
+            egui::RichText::new("Views")
                 .strong()
                 .size(crate::ui::styles::SIDEBAR_SECTION_SIZE)
                 .color(ui.visuals().text_color()),
         );
 
         let views = [
-            (ChartView::DailyKwh, "📈 Daily Usage"),
-            (ChartView::DailyHeatmap, "⚡ Daily Heatmap"),
-            (ChartView::WeekdayHeatmap, "📊 Weekday Avg"),
-            (ChartView::HourlyProfile, "🕒 Hourly Profile"),
-            (ChartView::ExportSparklines, "☀ Solar Export"),
-            (ChartView::GasDaily, "🔥 Gas Usage"),
+            ChartView::DailyKwh,
+            ChartView::DailyHeatmap,
+            ChartView::WeekdayHeatmap,
+            ChartView::HourlyProfile,
+            ChartView::ExportSparklines,
+            ChartView::GasDaily,
         ];
 
-        for (view, label) in views {
-            if ui
-                .selectable_label(self.current_view == view, label)
-                .clicked()
-            {
-                self.current_view = view;
-                self.config.ui.default_chart = view.to_string();
-                let _ = self.config.save();
-            }
+        for view in views {
+            let (icon, color, label) = Self::view_icon(view);
+            ui.horizontal(|ui| {
+                ui.label(egui::RichText::new(icon).size(18.0).color(color));
+                if ui
+                    .selectable_label(self.current_view == view, label)
+                    .clicked()
+                {
+                    self.set_view(view);
+                }
+            });
         }
 
-        ui.add_space(20.0);
+        ui.add_space(16.0);
         ui.label(
-            egui::RichText::new("Preferences:")
+            egui::RichText::new("Preferences")
                 .strong()
                 .size(crate::ui::styles::SIDEBAR_SECTION_SIZE)
                 .color(ui.visuals().text_color()),
         );
 
         let mut dark_mode = self.config.ui.dark_mode.unwrap_or(false);
-        if ui.checkbox(&mut dark_mode, "🌙 Dark Mode").changed() {
+        if ui
+            .checkbox(
+                &mut dark_mode,
+                egui::RichText::new("🌙 Dark Mode")
+                    .size(14.0)
+                    .color(egui::Color32::from_rgb(170, 190, 255)),
+            )
+            .changed()
+        {
             self.config.ui.dark_mode = Some(dark_mode);
             let _ = self.config.save();
             ui::apply_custom_style(ui.ctx(), Some(dark_mode));
@@ -247,7 +537,7 @@ impl PgeAnalyzerApp {
 
         ui.add_space(8.0);
         ui.label(
-            egui::RichText::new("Heatmap Palette:")
+            egui::RichText::new("Heatmap Palette")
                 .size(12.0)
                 .color(ui.visuals().text_color().gamma_multiply(0.8)),
         );
@@ -302,6 +592,7 @@ impl PgeAnalyzerApp {
                             data,
                             &mut self.heatmap_state,
                             &mut self.heatmap_metric,
+                            self.range_preset,
                         );
                     });
                 } else {
@@ -321,7 +612,12 @@ impl PgeAnalyzerApp {
             ChartView::ExportSparklines => {
                 if let Some(ref data) = self.electric_data {
                     ui::components::Card::new().show(ui, |ui| {
-                        charts::render_export_sparklines(ui, data, &mut self.heatmap_state);
+                        charts::render_export_sparklines(
+                            ui,
+                            data,
+                            &mut self.heatmap_state,
+                            self.range_preset,
+                        );
                     });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -528,10 +824,13 @@ impl eframe::App for PgeAnalyzerApp {
             ui::render_title_bar(ctx, "PG&E Usage Analyzer");
         }
 
+        let sidebar_width = if self.sidebar_collapsed { 44.0 } else { 180.0 };
         egui::SidePanel::left("sidebar_panel")
             .frame(egui::Frame::NONE.fill(egui::Color32::TRANSPARENT))
             .resizable(false)
-            .default_width(150.0)
+            .default_width(sidebar_width)
+            .min_width(sidebar_width)
+            .max_width(sidebar_width)
             .show(ctx, |ui| {
                 if USE_CUSTOM_WINDOW_CHROME {
                     ui.add_space(20.0); // Space for top rounding
@@ -558,6 +857,8 @@ impl eframe::App for PgeAnalyzerApp {
                 if USE_CUSTOM_WINDOW_CHROME {
                     ui.add_space(10.0);
                 }
+                self.render_command_bar(ui);
+                ui.add_space(8.0);
                 self.render_main_content(ui);
             });
 

@@ -8,6 +8,7 @@ pub struct HeatmapConfig<'a> {
     pub show_title: bool,
     pub unit: &'a str,
     pub selection_label: &'a str,
+    pub show_legend: bool,
     pub show_weekend_emphasis: bool,
     pub x_label_interval: usize,
     pub y_label_width: f32,
@@ -51,7 +52,7 @@ pub fn render_heatmap_component(
     let cell_height = config.cell_height;
 
     let mut selection_sum = 0.0;
-    let mut selection_count = 0;
+    let mut selection_hour_count = 0;
     let mut show_selection_info = false;
     let mut selection_rect = Option::<egui::Rect>::None;
 
@@ -68,7 +69,7 @@ pub fn render_heatmap_component(
                 for h in min_hour..=max_hour {
                     if h < heatmap_data[d].len() {
                         selection_sum += heatmap_data[d][h];
-                        selection_count += 1;
+                        selection_hour_count += 1;
                     }
                 }
             }
@@ -76,8 +77,41 @@ pub fn render_heatmap_component(
         show_selection_info = true;
     }
 
-    if !config.selection_label.is_empty() {
-        ui.label(config.selection_label);
+    let has_top_row = !config.selection_label.is_empty() || config.show_legend;
+    if has_top_row {
+        ui.horizontal(|ui| {
+            if !config.selection_label.is_empty() {
+                ui.label(config.selection_label);
+            }
+
+            if config.show_legend {
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    ui.label(
+                        egui::RichText::new(format!("0 to {:.1} {}", max_val, config.unit))
+                            .size(11.0)
+                            .color(ui.visuals().text_color().gamma_multiply(0.75)),
+                    );
+                    ui.add_space(8.0);
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().item_spacing = egui::vec2(1.0, 0.0);
+                        for i in 0..10 {
+                            let t0 = i as f64 / 10.0;
+                            let t1 = (i + 1) as f64 / 10.0;
+                            let v = (t0 + t1) * 0.5 * max_val;
+                            let color = crate::charts::colormap::get_heatmap_color(
+                                v,
+                                0.0,
+                                max_val,
+                                state.palette,
+                            );
+                            let (rect, _) =
+                                ui.allocate_exact_size(egui::vec2(8.0, 10.0), egui::Sense::hover());
+                            ui.painter().rect_filled(rect, 1.0, color);
+                        }
+                    });
+                });
+            }
+        });
         ui.add_space(crate::ui::styles::CHART_SPACING);
     }
 
@@ -112,6 +146,19 @@ pub fn render_heatmap_component(
                 });
             });
     });
+
+    let shadow_y = ui.cursor().top();
+    let shadow_width = (24.0 * cell_width) + config.y_label_width + config.daily_sum_width + 8.0;
+    let shadow_rect = egui::Rect::from_min_size(
+        egui::pos2(ui.min_rect().left(), shadow_y),
+        egui::vec2(shadow_width, 4.0),
+    );
+    let shadow_color = if ui.visuals().dark_mode {
+        egui::Color32::from_black_alpha(80)
+    } else {
+        egui::Color32::from_black_alpha(20)
+    };
+    ui.painter().rect_filled(shadow_rect, 0.0, shadow_color);
 
     let scroll_output = egui::ScrollArea::both()
         .id_salt(("heatmap_main", config.id))
@@ -531,55 +578,111 @@ pub fn render_heatmap_component(
 
     if show_selection_info {
         if let Some(rect) = selection_rect {
-            let pos = rect.right_top() + egui::vec2(10.0, 0.0);
+            let pos = rect.right_top() + egui::vec2(12.0, -4.0);
             egui::Area::new(egui::Id::new(("heatmap_selection", config.id)))
                 .fixed_pos(pos)
                 .order(egui::Order::Foreground)
                 .show(ui.ctx(), |ui| {
-                    egui::Frame::default()
-                        .fill(egui::Color32::from_black_alpha(240))
-                        .stroke(egui::Stroke::new(1.0, egui::Color32::WHITE))
-                        .corner_radius(4)
-                        .inner_margin(6)
+                    let card_fill = if ui.visuals().dark_mode {
+                        egui::Color32::from_rgba_unmultiplied(30, 34, 40, 235)
+                    } else {
+                        egui::Color32::from_rgba_unmultiplied(250, 252, 255, 245)
+                    };
+                    let card_stroke = egui::Stroke::new(
+                        1.0,
+                        ui.visuals()
+                            .widgets
+                            .noninteractive
+                            .bg_stroke
+                            .color
+                            .gamma_multiply(0.8),
+                    );
+                    let accent_color = crate::charts::colormap::get_heatmap_color(
+                        max_val * 0.6,
+                        0.0,
+                        max_val,
+                        state.palette,
+                    );
+                    let chip_fill = if ui.visuals().dark_mode {
+                        egui::Color32::from_rgba_unmultiplied(255, 255, 255, 16)
+                    } else {
+                        egui::Color32::from_rgba_unmultiplied(0, 0, 0, 14)
+                    };
+
+                    egui::Frame::NONE
+                        .fill(card_fill)
+                        .stroke(card_stroke)
+                        .corner_radius(egui::CornerRadius::same(10))
+                        .inner_margin(egui::Margin::symmetric(10, 8))
                         .show(ui, |ui| {
-                            ui.spacing_mut().item_spacing = egui::vec2(2.0, 2.0);
-                            ui.label(
-                                egui::RichText::new("SELECTION")
-                                    .size(10.0)
-                                    .color(egui::Color32::LIGHT_GRAY),
-                            );
                             ui.horizontal(|ui| {
-                                ui.label(
-                                    egui::RichText::new(format!("{}", selection_count))
-                                        .color(egui::Color32::WHITE)
-                                        .strong()
-                                        .size(18.0),
+                                let (accent_rect, _) = ui.allocate_exact_size(
+                                    egui::vec2(3.0, 50.0),
+                                    egui::Sense::hover(),
                                 );
-                                ui.label(
-                                    egui::RichText::new("cells")
-                                        .size(12.0)
-                                        .color(egui::Color32::GRAY),
+                                ui.painter().rect_filled(
+                                    accent_rect,
+                                    egui::CornerRadius::same(2),
+                                    accent_color,
                                 );
-                            });
-                            ui.horizontal(|ui| {
-                                let (val_text, unit_text) = if config.unit == "$" {
-                                    (format!("${:.2}", selection_sum), "")
-                                } else {
-                                    (format!("{:.2}", selection_sum), config.unit)
-                                };
-                                ui.label(
-                                    egui::RichText::new(val_text)
-                                        .color(egui::Color32::GREEN)
-                                        .strong()
-                                        .size(22.0),
-                                );
-                                if !unit_text.is_empty() {
+
+                                ui.add_space(8.0);
+
+                                ui.vertical(|ui| {
+                                    ui.spacing_mut().item_spacing = egui::vec2(4.0, 4.0);
                                     ui.label(
-                                        egui::RichText::new(unit_text)
-                                            .size(14.0)
-                                            .color(egui::Color32::GREEN),
+                                        egui::RichText::new("Selected Range")
+                                            .size(11.0)
+                                            .color(ui.visuals().text_color().gamma_multiply(0.7)),
                                     );
-                                }
+
+                                    let (value_text, unit_text) = if config.unit == "$" {
+                                        (format!("${:.2}", selection_sum), "")
+                                    } else {
+                                        (format!("{:.2}", selection_sum), config.unit)
+                                    };
+
+                                    ui.horizontal(|ui| {
+                                        ui.label(
+                                            egui::RichText::new(value_text)
+                                                .strong()
+                                                .size(20.0)
+                                                .color(accent_color),
+                                        );
+                                        if !unit_text.is_empty() {
+                                            ui.label(
+                                                egui::RichText::new(unit_text)
+                                                    .size(13.0)
+                                                    .color(accent_color.gamma_multiply(0.9)),
+                                            );
+                                        }
+                                    });
+
+                                    ui.horizontal(|ui| {
+                                        let chip_text_color =
+                                            ui.visuals().text_color().gamma_multiply(0.85);
+                                        let hour_label = if selection_hour_count == 1 {
+                                            "hour"
+                                        } else {
+                                            "hours"
+                                        };
+
+                                        egui::Frame::NONE
+                                            .fill(chip_fill)
+                                            .corner_radius(egui::CornerRadius::same(8))
+                                            .inner_margin(egui::Margin::symmetric(8, 4))
+                                            .show(ui, |ui| {
+                                                ui.label(
+                                                    egui::RichText::new(format!(
+                                                        "{} {}",
+                                                        selection_hour_count, hour_label
+                                                    ))
+                                                    .size(11.0)
+                                                    .color(chip_text_color),
+                                                );
+                                            });
+                                    });
+                                });
                             });
                         });
                 });

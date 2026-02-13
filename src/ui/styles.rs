@@ -4,7 +4,11 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
     ctx.style_mut(|style| {
         // Choose visuals based on preference or system settings
         let mut visuals = if let Some(dark) = dark_mode_pref {
-            if dark { Visuals::dark() } else { Visuals::light() }
+            if dark {
+                Visuals::dark()
+            } else {
+                Visuals::light()
+            }
         } else {
             Visuals::light() // Default to light if no preference
         };
@@ -45,7 +49,6 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
     });
 }
 
-
 pub const CHART_SPACING: f32 = 20.0;
 pub const WINDOW_ROUNDING: f32 = 12.0;
 
@@ -69,7 +72,6 @@ pub fn primary_chart_color() -> egui::Color32 {
 pub fn average_chart_color() -> egui::Color32 {
     egui::Color32::from_rgb(255, 127, 14)
 }
-
 
 // Core Theme Colors
 pub fn window_bg() -> egui::Color32 {
