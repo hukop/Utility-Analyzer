@@ -12,7 +12,7 @@ mod config;
 use anyhow::Result;
 use data::{ElectricData, GasData};
 use std::path::{Path, PathBuf};
-use ui::ChartView;
+use ui::{ChartView, HeatmapMetric};
 use config::Config;
 
 struct PgeAnalyzerApp {
@@ -23,6 +23,7 @@ struct PgeAnalyzerApp {
     error_message: Option<String>,
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
+    heatmap_metric: HeatmapMetric,
     resize_state: ui::WindowResizeState,
     last_sync_pos: Option<egui::Pos2>,
     last_sync_size: Option<egui::Vec2>,
@@ -53,6 +54,7 @@ impl Default for PgeAnalyzerApp {
             error_message: None,
             data_dir,
             heatmap_state,
+            heatmap_metric: HeatmapMetric::default(),
             resize_state: ui::WindowResizeState::new(),
             last_sync_pos: None,
             last_sync_size: None,
@@ -187,7 +189,6 @@ impl PgeAnalyzerApp {
         let views = [
             (ChartView::DailyKwh, "📈 Daily Usage"),
             (ChartView::DailyHeatmap, "⚡ Daily Heatmap"),
-            (ChartView::CostHeatmap, "💰 Cost Heatmap"),
             (ChartView::WeekdayHeatmap, "📊 Weekday Avg"),
             (ChartView::HourlyProfile, "🕒 Hourly Profile"),
             (ChartView::ExportSparklines, "☀ Solar Export"),
@@ -255,18 +256,33 @@ impl PgeAnalyzerApp {
                 }
             }
             ChartView::DailyHeatmap => {
-                if let Some(ref data) = self.electric_data {
+                // Clone data to avoid borrow issues with the closure
+                let data_clone = self.electric_data.clone();
+                if let Some(ref data) = data_clone {
                     ui::components::Card::new().show(ui, |ui| {
-                        charts::render_daily_heatmap(ui, data, &mut self.heatmap_state);
-                    });
-                } else {
-                    ui.label("No electric data loaded. Please load a CSV file.");
-                }
-            }
-            ChartView::CostHeatmap => {
-                if let Some(ref data) = self.electric_data {
-                    ui::components::Card::new().show(ui, |ui| {
-                        charts::render_cost_heatmap(ui, data, &mut self.heatmap_state);
+                        // Split top area into two halves
+                        ui.horizontal(|ui| {
+                            // Left half - heading and content (most of the space)
+                            ui.vertical(|ui| {
+                                ui.heading("Daily Heatmap");
+                            });
+                             // Right half - toggle buttons (remaining width)
+                            ui.vertical(|ui| {
+                                // Position buttons at top of right half, same level as heading
+                                Self::render_heatmap_toggle_buttons(ui, self.heatmap_metric, |new_metric| {
+                                    self.heatmap_metric = new_metric;
+                                });
+                            });
+                        });
+                        ui.add_space(4.0);
+                        match self.heatmap_metric {
+                            HeatmapMetric::Energy => {
+                                charts::render_daily_heatmap(ui, data, &mut self.heatmap_state);
+                            }
+                            HeatmapMetric::Cost => {
+                                charts::render_cost_heatmap(ui, data, &mut self.heatmap_state);
+                            }
+                        }
                     });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -302,6 +318,93 @@ impl PgeAnalyzerApp {
                 }
             }
         }
+    }
+
+    fn render_heatmap_toggle_buttons(
+        ui: &mut egui::Ui,
+        current_metric: HeatmapMetric,
+        mut on_toggle: impl FnMut(HeatmapMetric)
+    ) {
+        ui.horizontal(|ui| {
+            // Add space to push buttons to the right, but closer to center
+            ui.add_space(ui.available_width()*3.0/4.0);
+
+            let button_size = egui::vec2(60.0, 28.0);
+            let overlap = 10.0;
+            let toggle_width = button_size.x * 2.0 - overlap;
+            let toggle_height = button_size.y;
+
+            let (toggle_rect, _) = ui.allocate_exact_size(
+                egui::vec2(toggle_width, toggle_height),
+                egui::Sense::hover(),
+            );
+
+            let energy_rect =
+                egui::Rect::from_min_size(toggle_rect.min, button_size);
+            let cost_rect = egui::Rect::from_min_size(
+                egui::pos2(toggle_rect.min.x + button_size.x - overlap, toggle_rect.min.y),
+                button_size,
+            );
+
+            let draw_energy = |ui: &mut egui::Ui, selected: bool| {
+                ui.put(
+                    energy_rect,
+                    egui::Button::new("Energy")
+                        .selected(selected)
+                        .corner_radius(if selected {
+                            egui::CornerRadius::same(16)
+                        } else {
+                            egui::CornerRadius {
+                                nw: 16,
+                                ne: 0,
+                                sw: 16,
+                                se: 0,
+                            }
+                        })
+                        .min_size(button_size),
+                )
+            };
+
+            let draw_cost = |ui: &mut egui::Ui, selected: bool| {
+                ui.put(
+                    cost_rect,
+                    egui::Button::new("Cost")
+                        .selected(selected)
+                        .corner_radius(if selected {
+                            egui::CornerRadius::same(16)
+                        } else {
+                            egui::CornerRadius {
+                                nw: 0,
+                                ne: 16,
+                                sw: 0,
+                                se: 16,
+                            }
+                        })
+                        .min_size(button_size),
+                )
+            };
+
+            let is_energy_selected = current_metric == HeatmapMetric::Energy;
+
+            let (energy_response, cost_response) = if is_energy_selected {
+                // Draw selected second so it appears on top while positions stay fixed.
+                let cost_response = draw_cost(ui, false);
+                let energy_response = draw_energy(ui, true);
+                (energy_response, cost_response)
+            } else {
+                // Draw selected second so it appears on top while positions stay fixed.
+                let energy_response = draw_energy(ui, false);
+                let cost_response = draw_cost(ui, true);
+                (energy_response, cost_response)
+            };
+
+            if energy_response.clicked() {
+                on_toggle(HeatmapMetric::Energy);
+            }
+            if cost_response.clicked() {
+                on_toggle(HeatmapMetric::Cost);
+            }
+        });
     }
 
     fn handle_window_persistence(&mut self, ctx: &egui::Context) {

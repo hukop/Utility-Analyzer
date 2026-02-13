@@ -193,7 +193,7 @@ height = 900.0
 maximized = false
 
 [ui]
-default_chart = "DailyKwh"  # Options: DailyKwh, WeekdayHeatmap, DailyHeatmap, CostHeatmap, HourlyProfile, GasDaily
+default_chart = "DailyKwh"  # Options: DailyKwh, WeekdayHeatmap, DailyHeatmap, HourlyProfile, GasDaily
 dark_mode = true           # Force dark mode (optional)
 font_scale = 1.0           # Font size multiplier
 ```

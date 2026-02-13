@@ -13,10 +13,34 @@ pub enum ChartView {
     DailyKwh,
     WeekdayHeatmap,
     DailyHeatmap,
-    CostHeatmap,
     HourlyProfile,
     ExportSparklines,
     GasDaily,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HeatmapMetric {
+    #[default]
+    Energy,
+    Cost,
+}
+
+impl HeatmapMetric {
+    #[allow(dead_code)]
+    pub fn name(&self) -> &'static str {
+        match self {
+            Self::Energy => "Energy",
+            Self::Cost => "Cost",
+        }
+    }
+
+    #[allow(dead_code)]
+    pub fn toggle(&self) -> Self {
+        match self {
+            Self::Energy => Self::Cost,
+            Self::Cost => Self::Energy,
+        }
+    }
 }
 
 impl ChartView {
@@ -24,7 +48,6 @@ impl ChartView {
         match s {
             "WeekdayHeatmap" => Self::WeekdayHeatmap,
             "DailyHeatmap" => Self::DailyHeatmap,
-            "CostHeatmap" => Self::CostHeatmap,
             "HourlyProfile" => Self::HourlyProfile,
             "ExportSparklines" => Self::ExportSparklines,
             "GasDaily" => Self::GasDaily,
@@ -37,12 +60,11 @@ impl std::fmt::Display for ChartView {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
             Self::DailyKwh => "DailyKwh",
-            Self::WeekdayHeatmap => "WeekdayHeatmap",
             Self::DailyHeatmap => "DailyHeatmap",
-            Self::CostHeatmap => "CostHeatmap",
             Self::HourlyProfile => "HourlyProfile",
             Self::ExportSparklines => "ExportSparklines",
             Self::GasDaily => "GasDaily",
+            Self::WeekdayHeatmap => "WeekdayHeatmap",
         };
         write!(f, "{}", s)
     }
