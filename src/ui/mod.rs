@@ -26,21 +26,6 @@ pub enum HeatmapMetric {
 }
 
 impl HeatmapMetric {
-    #[allow(dead_code)]
-    pub fn name(&self) -> &'static str {
-        match self {
-            Self::Energy => "Energy",
-            Self::Cost => "Cost",
-        }
-    }
-
-    #[allow(dead_code)]
-    pub fn toggle(&self) -> Self {
-        match self {
-            Self::Energy => Self::Cost,
-            Self::Cost => Self::Energy,
-        }
-    }
 }
 
 impl ChartView {

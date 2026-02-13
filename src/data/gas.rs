@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
+use egui_plot::PlotPoint;
 use std::collections::HashMap;
 
 /// A single data point representing gas usage cost on a specific date.
@@ -16,6 +17,16 @@ pub struct GasDataPoint {
 pub struct GasData {
     /// The list of gas usage data points, usually sorted by date.
     pub data: Vec<GasDataPoint>,
+    /// Cached daily totals for line charts.
+    daily_totals_cache: Vec<(DateTime<Utc>, f64)>,
+    /// Cached 7-day rolling average from daily totals.
+    daily_totals_avg7_cache: Vec<(DateTime<Utc>, f64)>,
+    /// Cached daily line series points for zero-allocation plotting.
+    daily_points_cache: Vec<PlotPoint>,
+    /// Cached 7-day average line series points for zero-allocation plotting.
+    daily_avg7_points_cache: Vec<PlotPoint>,
+    /// Cached x-bounds for daily charts.
+    daily_bounds_cache: Option<(f64, f64)>,
 }
 
 impl GasData {
@@ -65,14 +76,43 @@ impl GasData {
         let data: Vec<GasDataPoint> = merged_data.into_values().collect();
         // BTreeMap is already sorted by date
 
-        Ok(Self { data })
+        let mut this = Self {
+            data,
+            daily_totals_cache: Vec::new(),
+            daily_totals_avg7_cache: Vec::new(),
+            daily_points_cache: Vec::new(),
+            daily_avg7_points_cache: Vec::new(),
+            daily_bounds_cache: None,
+        };
+        this.recalculate_caches();
+
+        Ok(this)
     }
 
-    /// Get daily totals (already daily, but aggregate just in case)
-    pub fn daily_totals(&self) -> Vec<(DateTime<Utc>, f64)> {
+    fn recalculate_caches(&mut self) {
+        self.daily_totals_cache = Self::compute_daily_totals_from_points(&self.data);
+        self.daily_totals_avg7_cache = Self::compute_rolling_average(&self.daily_totals_cache, 7);
+        self.daily_points_cache = self
+            .daily_totals_cache
+            .iter()
+            .map(|(dt, val)| PlotPoint::new(dt.timestamp() as f64, *val))
+            .collect();
+        self.daily_avg7_points_cache = self
+            .daily_totals_avg7_cache
+            .iter()
+            .map(|(dt, val)| PlotPoint::new(dt.timestamp() as f64, *val))
+            .collect();
+        self.daily_bounds_cache = self
+            .daily_totals_cache
+            .first()
+            .zip(self.daily_totals_cache.last())
+            .map(|((start, _), (end, _))| (start.timestamp() as f64, end.timestamp() as f64));
+    }
+
+    fn compute_daily_totals_from_points(data: &[GasDataPoint]) -> Vec<(DateTime<Utc>, f64)> {
         let mut daily: HashMap<String, f64> = HashMap::new();
 
-        for point in &self.data {
+        for point in data {
             let date_key = point.date.format("%Y-%m-%d").to_string();
             *daily.entry(date_key).or_insert(0.0) += point.cost;
         }
@@ -89,6 +129,43 @@ impl GasData {
 
         result.sort_by_key(|(dt, _)| *dt);
         result
+    }
+
+    fn compute_rolling_average(
+        data: &[(DateTime<Utc>, f64)],
+        window: usize,
+    ) -> Vec<(DateTime<Utc>, f64)> {
+        if data.len() < window {
+            return data.to_vec();
+        }
+
+        let mut result = Vec::with_capacity(data.len());
+        let half_window = window / 2;
+
+        for i in 0..data.len() {
+            let start = i.saturating_sub(half_window);
+            let end = (i + half_window + 1).min(data.len());
+            let sum: f64 = data[start..end].iter().map(|(_, v)| v).sum();
+            let count = (end - start) as f64;
+            result.push((data[i].0, sum / count));
+        }
+
+        result
+    }
+
+    /// Returns plot-ready points for daily charts without per-frame allocation.
+    pub fn daily_plot_points_cached(&self) -> &[PlotPoint] {
+        &self.daily_points_cache
+    }
+
+    /// Returns plot-ready 7-day average points without per-frame allocation.
+    pub fn daily_avg7_plot_points_cached(&self) -> &[PlotPoint] {
+        &self.daily_avg7_points_cache
+    }
+
+    /// Returns x-bounds for daily charts.
+    pub fn daily_chart_bounds(&self) -> Option<(f64, f64)> {
+        self.daily_bounds_cache
     }
 }
 

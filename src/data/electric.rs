@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use chrono::{DateTime, Datelike, NaiveDateTime, Timelike, Utc};
+use egui_plot::PlotPoint;
 use std::collections::HashMap;
 
 /// A single data point representing electric usage at a specific time.
@@ -32,6 +33,28 @@ pub struct ElectricData {
     pub yearly_cost_sums: HashMap<String, f64>,
     /// Pre-calculated sums of export (kWh) per year (YYYY).
     pub yearly_export_sums: HashMap<String, f64>,
+    /// Cached daily totals for line charts.
+    daily_totals_cache: Vec<(DateTime<Utc>, f64)>,
+    /// Cached 7-day rolling average from daily totals.
+    daily_totals_avg7_cache: Vec<(DateTime<Utc>, f64)>,
+    /// Cached daily line series points for zero-allocation plotting.
+    daily_points_cache: Vec<PlotPoint>,
+    /// Cached 7-day average line series points for zero-allocation plotting.
+    daily_avg7_points_cache: Vec<PlotPoint>,
+    /// Cached x-bounds for daily charts.
+    daily_bounds_cache: Option<(f64, f64)>,
+    /// Cached weekday/hour averages.
+    weekday_hour_average_cache: [[f64; 24]; 7],
+    /// Cached hourly profile averages.
+    hourly_profile_cache: [f64; 24],
+    /// Cached hourly export profile averages.
+    hourly_export_profile_cache: [f64; 24],
+    /// Cached daily/hourly kWh heatmap.
+    daily_hour_heatmap_cache: (Vec<String>, Vec<Vec<f64>>),
+    /// Cached daily/hourly cost heatmap.
+    daily_hour_cost_heatmap_cache: (Vec<String>, Vec<Vec<f64>>),
+    /// Cached daytime export sparkline data.
+    daily_daytime_export_cache: (Vec<String>, Vec<Vec<f64>>, Vec<f64>),
 }
 
 impl ElectricData {
@@ -96,9 +119,21 @@ impl ElectricData {
             yearly_kwh_sums: HashMap::new(),
             yearly_cost_sums: HashMap::new(),
             yearly_export_sums: HashMap::new(),
+            daily_totals_cache: Vec::new(),
+            daily_totals_avg7_cache: Vec::new(),
+            daily_points_cache: Vec::new(),
+            daily_avg7_points_cache: Vec::new(),
+            daily_bounds_cache: None,
+            weekday_hour_average_cache: [[0.0; 24]; 7],
+            hourly_profile_cache: [0.0; 24],
+            hourly_export_profile_cache: [0.0; 24],
+            daily_hour_heatmap_cache: (Vec::new(), Vec::new()),
+            daily_hour_cost_heatmap_cache: (Vec::new(), Vec::new()),
+            daily_daytime_export_cache: (Vec::new(), Vec::new(), Vec::new()),
         };
 
         self_obj.recalculate_summaries();
+        self_obj.recalculate_caches();
 
         Ok(self_obj)
     }
@@ -127,11 +162,38 @@ impl ElectricData {
         }
     }
 
-    /// Get daily totals
-    pub fn daily_totals(&self) -> Vec<(DateTime<Utc>, f64)> {
+    fn recalculate_caches(&mut self) {
+        self.daily_totals_cache = Self::compute_daily_totals_from_points(&self.data);
+        self.daily_totals_avg7_cache = Self::compute_rolling_average(&self.daily_totals_cache, 7);
+        self.daily_points_cache = self
+            .daily_totals_cache
+            .iter()
+            .map(|(dt, val)| PlotPoint::new(dt.timestamp() as f64, *val))
+            .collect();
+        self.daily_avg7_points_cache = self
+            .daily_totals_avg7_cache
+            .iter()
+            .map(|(dt, val)| PlotPoint::new(dt.timestamp() as f64, *val))
+            .collect();
+
+        self.daily_bounds_cache = self
+            .daily_totals_cache
+            .first()
+            .zip(self.daily_totals_cache.last())
+            .map(|((start, _), (end, _))| (start.timestamp() as f64, end.timestamp() as f64));
+
+        self.weekday_hour_average_cache = Self::compute_weekday_hour_average(&self.data);
+        self.hourly_profile_cache = Self::compute_hourly_profile(&self.data);
+        self.hourly_export_profile_cache = Self::compute_hourly_export_profile(&self.data);
+        self.daily_hour_heatmap_cache = Self::compute_daily_hour_heatmap(&self.data);
+        self.daily_hour_cost_heatmap_cache = Self::compute_daily_hour_cost_heatmap(&self.data);
+        self.daily_daytime_export_cache = Self::compute_daily_daytime_export_data(&self.data);
+    }
+
+    fn compute_daily_totals_from_points(data: &[ElectricDataPoint]) -> Vec<(DateTime<Utc>, f64)> {
         let mut daily: HashMap<String, f64> = HashMap::new();
 
-        for point in &self.data {
+        for point in data {
             let date_key = point.timestamp.format("%Y-%m-%d").to_string();
             *daily.entry(date_key).or_insert(0.0) += point.kwh;
         }
@@ -149,12 +211,33 @@ impl ElectricData {
         result
     }
 
-    /// Returns average kWh grouped by weekday and hour of day.
-    pub fn weekday_hour_average(&self) -> [[f64; 24]; 7] {
+    fn compute_rolling_average(
+        data: &[(DateTime<Utc>, f64)],
+        window: usize,
+    ) -> Vec<(DateTime<Utc>, f64)> {
+        if data.len() < window {
+            return data.to_vec();
+        }
+
+        let mut result = Vec::with_capacity(data.len());
+        let half_window = window / 2;
+
+        for i in 0..data.len() {
+            let start = i.saturating_sub(half_window);
+            let end = (i + half_window + 1).min(data.len());
+            let sum: f64 = data[start..end].iter().map(|(_, v)| v).sum();
+            let count = (end - start) as f64;
+            result.push((data[i].0, sum / count));
+        }
+
+        result
+    }
+
+    fn compute_weekday_hour_average(data: &[ElectricDataPoint]) -> [[f64; 24]; 7] {
         let mut totals = [[0.0; 24]; 7];
         let mut counts = [[0u32; 24]; 7];
 
-        for point in &self.data {
+        for point in data {
             let weekday = point.timestamp.weekday().num_days_from_monday() as usize;
             let hour = point.timestamp.hour() as usize;
 
@@ -174,12 +257,11 @@ impl ElectricData {
         averages
     }
 
-    /// Returns average kWh grouped by hour of day (0-23).
-    pub fn hourly_profile(&self) -> [f64; 24] {
+    fn compute_hourly_profile(data: &[ElectricDataPoint]) -> [f64; 24] {
         let mut totals = [0.0; 24];
         let mut counts = [0u32; 24];
 
-        for point in &self.data {
+        for point in data {
             let hour = point.timestamp.hour() as usize;
             totals[hour] += point.kwh;
             counts[hour] += 1;
@@ -195,12 +277,11 @@ impl ElectricData {
         profile
     }
 
-    /// Returns average export kWh grouped by hour of day (0-23).
-    pub fn hourly_export_profile(&self) -> [f64; 24] {
+    fn compute_hourly_export_profile(data: &[ElectricDataPoint]) -> [f64; 24] {
         let mut totals = [0.0; 24];
         let mut counts = [0u32; 24];
 
-        for point in &self.data {
+        for point in data {
             let hour = point.timestamp.hour() as usize;
             totals[hour] += point.export_kwh;
             counts[hour] += 1;
@@ -216,60 +297,47 @@ impl ElectricData {
         profile
     }
 
-    /// Returns a list of dates and a 2D matrix of kWh by [day][hour].
-    pub fn daily_hour_heatmap(&self) -> (Vec<String>, Vec<Vec<f64>>) {
+    fn compute_daily_hour_heatmap(data: &[ElectricDataPoint]) -> (Vec<String>, Vec<Vec<f64>>) {
         let mut daily_data: HashMap<String, [f64; 24]> = HashMap::new();
 
-        for point in &self.data {
+        for point in data {
             let date_key = point.timestamp.format("%Y-%m-%d").to_string();
             let hour = point.timestamp.hour() as usize;
-
             let day_data = daily_data.entry(date_key).or_insert([0.0; 24]);
             day_data[hour] += point.kwh;
         }
 
         let mut dates: Vec<String> = daily_data.keys().cloned().collect();
         dates.sort();
+        let heatmap = dates.iter().map(|date| daily_data[date].to_vec()).collect();
 
-        let data: Vec<Vec<f64>> = dates
-            .iter()
-            .map(|date| daily_data[date].to_vec())
-            .collect();
-
-        (dates, data)
+        (dates, heatmap)
     }
 
-    /// Returns a list of dates and a 2D matrix of cost by [day][hour].
-    pub fn daily_hour_cost_heatmap(&self) -> (Vec<String>, Vec<Vec<f64>>) {
+    fn compute_daily_hour_cost_heatmap(data: &[ElectricDataPoint]) -> (Vec<String>, Vec<Vec<f64>>) {
         let mut daily_data: HashMap<String, [f64; 24]> = HashMap::new();
 
-        for point in &self.data {
+        for point in data {
             let date_key = point.timestamp.format("%Y-%m-%d").to_string();
             let hour = point.timestamp.hour() as usize;
-
             let day_data = daily_data.entry(date_key).or_insert([0.0; 24]);
             day_data[hour] += point.cost;
         }
 
         let mut dates: Vec<String> = daily_data.keys().cloned().collect();
         dates.sort();
+        let heatmap = dates.iter().map(|date| daily_data[date].to_vec()).collect();
 
-        let data: Vec<Vec<f64>> = dates
-            .iter()
-            .map(|date| daily_data[date].to_vec())
-            .collect();
-
-        (dates, data)
+        (dates, heatmap)
     }
 
-    /// Returns daytime (6-18) export data for sparkline charts.
-    /// Returns (dates, export_data_per_day, daily_sums) where each day has 13 values (hours 6-18).
-    pub fn daily_daytime_export_data(&self) -> (Vec<String>, Vec<Vec<f64>>, Vec<f64>) {
+    fn compute_daily_daytime_export_data(
+        data: &[ElectricDataPoint],
+    ) -> (Vec<String>, Vec<Vec<f64>>, Vec<f64>) {
         let mut daily_data: HashMap<String, [f64; 13]> = HashMap::new();
 
-        for point in &self.data {
+        for point in data {
             let hour = point.timestamp.hour() as usize;
-            // Only include hours 6-18 (indices 0-12 in our 13-element array)
             if (6..=18).contains(&hour) {
                 let date_key = point.timestamp.format("%Y-%m-%d").to_string();
                 let day_data = daily_data.entry(date_key).or_insert([0.0; 13]);
@@ -280,17 +348,62 @@ impl ElectricData {
         let mut dates: Vec<String> = daily_data.keys().cloned().collect();
         dates.sort();
 
-        let data: Vec<Vec<f64>> = dates
-            .iter()
-            .map(|date| daily_data[date].to_vec())
-            .collect();
+        let export_data: Vec<Vec<f64>> = dates.iter().map(|date| daily_data[date].to_vec()).collect();
+        let sums: Vec<f64> = export_data.iter().map(|day| day.iter().sum()).collect();
 
-        let sums: Vec<f64> = data
-            .iter()
-            .map(|day| day.iter().sum())
-            .collect();
+        (dates, export_data, sums)
+    }
 
-        (dates, data, sums)
+    /// Returns plot-ready points for daily charts without per-frame allocation.
+    pub fn daily_plot_points_cached(&self) -> &[PlotPoint] {
+        &self.daily_points_cache
+    }
+
+    /// Returns plot-ready 7-day average points without per-frame allocation.
+    pub fn daily_avg7_plot_points_cached(&self) -> &[PlotPoint] {
+        &self.daily_avg7_points_cache
+    }
+
+    /// Returns x-bounds for daily charts.
+    pub fn daily_chart_bounds(&self) -> Option<(f64, f64)> {
+        self.daily_bounds_cache
+    }
+
+    /// Returns cached weekday/hour averages without recomputation.
+    pub fn weekday_hour_average_cached(&self) -> &[[f64; 24]; 7] {
+        &self.weekday_hour_average_cache
+    }
+
+    /// Returns cached hourly profile without recomputation.
+    pub fn hourly_profile_cached(&self) -> &[f64; 24] {
+        &self.hourly_profile_cache
+    }
+
+    /// Returns cached hourly export profile without recomputation.
+    pub fn hourly_export_profile_cached(&self) -> &[f64; 24] {
+        &self.hourly_export_profile_cache
+    }
+
+    /// Returns cached kWh heatmap without per-frame allocations.
+    pub fn daily_hour_heatmap_cached(&self) -> (&[String], &[Vec<f64>]) {
+        (&self.daily_hour_heatmap_cache.0, &self.daily_hour_heatmap_cache.1)
+    }
+
+    /// Returns cached cost heatmap without per-frame allocations.
+    pub fn daily_hour_cost_heatmap_cached(&self) -> (&[String], &[Vec<f64>]) {
+        (
+            &self.daily_hour_cost_heatmap_cache.0,
+            &self.daily_hour_cost_heatmap_cache.1,
+        )
+    }
+
+    /// Returns cached daytime export sparkline data without per-frame allocations.
+    pub fn daily_daytime_export_data_cached(&self) -> (&[String], &[Vec<f64>], &[f64]) {
+        (
+            &self.daily_daytime_export_cache.0,
+            &self.daily_daytime_export_cache.1,
+            &self.daily_daytime_export_cache.2,
+        )
     }
 }
 

@@ -120,29 +120,3 @@ pub fn get_config_path() -> PathBuf {
 
     config_dir.join("config.toml")
 }
-
-/// Create a sample configuration file for documentation purposes
-#[allow(dead_code)]
-pub fn create_sample_config() -> Result<()> {
-    let sample_path = PathBuf::from("config.example.toml");
-    let config = Config::default();
-
-    let content = toml::to_string_pretty(&config)
-        .context("Failed to serialize sample configuration")?;
-
-    let sample_content = format!(
-        "# PG&E Analyzer Configuration File\n\
-         # Copy this file to config.toml and modify as needed\n\
-         # \n\
-         # Windows: %APPDATA%\\pge-analyzer\\config.toml\n\
-         # Linux/macOS: ~/.config/pge-analyzer/config.toml\n\
-         \n{}",
-        content
-    );
-
-    std::fs::write(&sample_path, sample_content)
-        .with_context(|| format!("Failed to write sample config file: {}", sample_path.display()))?;
-
-    println!("Sample configuration created at: {}", sample_path.display());
-    Ok(())
-}

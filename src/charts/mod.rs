@@ -87,36 +87,6 @@ pub struct HeatmapState {
     pub palette: HeatmapPalette,
 }
 
-/// Calculates a moving average over a sliding window.
-///
-/// # Arguments
-/// * `data` - Vector of (Timestamp, Value) tuples.
-/// * `window` - Size of the sliding window.
-pub fn calculate_rolling_average(
-    data: &[(chrono::DateTime<chrono::Utc>, f64)],
-    window: usize,
-) -> Vec<(chrono::DateTime<chrono::Utc>, f64)> {
-    if data.len() < window {
-        return data.to_vec();
-    }
-
-    let mut result = Vec::new();
-    let half_window = window / 2;
-
-    for i in 0..data.len() {
-        let start = i.saturating_sub(half_window);
-        let end = (i + half_window + 1).min(data.len());
-
-        let sum: f64 = data[start..end].iter().map(|(_, v)| v).sum();
-        let count = (end - start) as f64;
-        let avg = sum / count;
-
-        result.push((data[i].0, avg));
-    }
-
-    result
-}
-
 /// Shared state for zooming and panning charts
 #[derive(Debug, Clone, Default)]
 pub struct ChartZoomState {
@@ -131,7 +101,7 @@ pub fn render_zoomable_daily_chart(
     state: &mut ChartZoomState,
     chart_id: &str,
     initial_bounds: (f64, f64),
-    lines: Vec<egui_plot::Line>,
+    lines: Vec<egui_plot::Line<'_>>,
 ) {
     use egui_plot::{Plot, PlotBounds};
     use chrono::DateTime;

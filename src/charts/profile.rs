@@ -4,8 +4,8 @@ use egui_plot::{Line, Plot, PlotPoints, GridMark};
 
 pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
     ui.add_space(crate::ui::styles::CHART_SPACING);
-    let profile = data.hourly_profile();
-    let export_profile = data.hourly_export_profile();
+    let profile = data.hourly_profile_cached();
+    let export_profile = data.hourly_export_profile_cached();
 
     // Convert Points (All points)
     let points: PlotPoints = profile

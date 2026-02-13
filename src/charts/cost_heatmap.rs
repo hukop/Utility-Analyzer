@@ -4,7 +4,7 @@ use crate::charts::HeatmapState;
 use crate::charts::heatmap_base::{render_heatmap_component, HeatmapConfig};
 
 pub fn render_cost_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut HeatmapState) {
-    let (dates, heatmap_data) = data.daily_hour_cost_heatmap();
+    let (dates, heatmap_data) = data.daily_hour_cost_heatmap_cached();
 
     let config = HeatmapConfig {
         title: "Daily Cost ($) Heatmap: Day (rows) vs Hour (columns)".to_string(),
@@ -20,5 +20,5 @@ pub fn render_cost_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heatmap
         max_value_override: Some(2.0),
     };
 
-    render_heatmap_component(ui, &dates, &heatmap_data, state, config);
+    render_heatmap_component(ui, dates, heatmap_data, state, config);
 }

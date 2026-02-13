@@ -14,7 +14,7 @@ const WEEKDAYS: [&str; 7] = [
 ];
 
 pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut HeatmapState) {
-    let raw_data = data.weekday_hour_average();
+    let raw_data = data.weekday_hour_average_cached();
     let dates: Vec<String> = WEEKDAYS.iter().map(|&s| s.to_string()).collect();
 
     let heatmap_data: Vec<Vec<f64>> = raw_data.iter()

@@ -15,6 +15,11 @@ use std::path::{Path, PathBuf};
 use ui::{ChartView, HeatmapMetric};
 use config::Config;
 
+#[cfg(target_os = "windows")]
+const USE_CUSTOM_WINDOW_CHROME: bool = false;
+#[cfg(not(target_os = "windows"))]
+const USE_CUSTOM_WINDOW_CHROME: bool = true;
+
 struct PgeAnalyzerApp {
     config: Config,
     electric_data: Option<ElectricData>,
@@ -28,6 +33,8 @@ struct PgeAnalyzerApp {
     last_sync_pos: Option<egui::Pos2>,
     last_sync_size: Option<egui::Vec2>,
     last_sync_maximized: bool,
+    #[cfg(target_os = "windows")]
+    last_sync_native_titlebar_dark: Option<bool>,
     sync_timer: f32,
     zoom_state: charts::ChartZoomState,
 }
@@ -59,6 +66,8 @@ impl Default for PgeAnalyzerApp {
             last_sync_pos: None,
             last_sync_size: None,
             last_sync_maximized: false,
+            #[cfg(target_os = "windows")]
+            last_sync_native_titlebar_dark: None,
             sync_timer: 0.0,
             zoom_state: charts::ChartZoomState::default(),
         }
@@ -256,9 +265,9 @@ impl PgeAnalyzerApp {
                 }
             }
             ChartView::DailyHeatmap => {
-                // Clone data to avoid borrow issues with the closure
-                let data_clone = self.electric_data.clone();
-                if let Some(ref data) = data_clone {
+                if let Some(data) = self.electric_data.as_ref() {
+                    let heatmap_state = &mut self.heatmap_state;
+                    let mut heatmap_metric = self.heatmap_metric;
                     ui::components::Card::new().show(ui, |ui| {
                         // Split top area into two halves
                         ui.horizontal(|ui| {
@@ -269,21 +278,22 @@ impl PgeAnalyzerApp {
                              // Right half - toggle buttons (remaining width)
                             ui.vertical(|ui| {
                                 // Position buttons at top of right half, same level as heading
-                                Self::render_heatmap_toggle_buttons(ui, self.heatmap_metric, |new_metric| {
-                                    self.heatmap_metric = new_metric;
+                                Self::render_heatmap_toggle_buttons(ui, heatmap_metric, |new_metric| {
+                                    heatmap_metric = new_metric;
                                 });
                             });
                         });
                         ui.add_space(4.0);
-                        match self.heatmap_metric {
+                        match heatmap_metric {
                             HeatmapMetric::Energy => {
-                                charts::render_daily_heatmap(ui, data, &mut self.heatmap_state);
+                                charts::render_daily_heatmap(ui, data, heatmap_state);
                             }
                             HeatmapMetric::Cost => {
-                                charts::render_cost_heatmap(ui, data, &mut self.heatmap_state);
+                                charts::render_cost_heatmap(ui, data, heatmap_state);
                             }
                         }
                     });
+                    self.heatmap_metric = heatmap_metric;
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
                 }
@@ -462,43 +472,145 @@ impl PgeAnalyzerApp {
             ctx.request_repaint(); // Keep updating until timer hits zero
         }
     }
+
+    #[cfg(target_os = "windows")]
+    fn apply_native_titlebar_colors(&self, frame: &eframe::Frame, dark_mode: bool) {
+        use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
+        use windows::Win32::Foundation::HWND;
+        use windows::Win32::Graphics::Dwm::{
+            DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
+            DwmSetWindowAttribute,
+        };
+
+        let Ok(window_handle) = frame.window_handle() else {
+            return;
+        };
+
+        let RawWindowHandle::Win32(win32) = window_handle.as_raw() else {
+            return;
+        };
+
+        let hwnd = HWND(win32.hwnd.get() as *mut core::ffi::c_void);
+
+        let caption_color = if dark_mode {
+            egui::Color32::from_rgb(32, 32, 32)
+        } else {
+            ui::styles::window_bg()
+        };
+        let caption_colorref =
+            u32::from(caption_color.r()) | (u32::from(caption_color.g()) << 8) | (u32::from(caption_color.b()) << 16);
+
+        let text_color = if dark_mode {
+            egui::Color32::from_rgb(255, 255, 255)
+        } else {
+            egui::Color32::from_rgb(0, 0, 0)
+        };
+        let text_colorref =
+            u32::from(text_color.r()) | (u32::from(text_color.g()) << 8) | (u32::from(text_color.b()) << 16);
+
+        let immersive_dark: i32 = if dark_mode { 1 } else { 0 };
+
+        // Best effort: unsupported attributes are ignored on older Windows builds.
+        unsafe {
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_USE_IMMERSIVE_DARK_MODE,
+                (&immersive_dark as *const i32).cast(),
+                std::mem::size_of::<i32>() as u32,
+            );
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_CAPTION_COLOR,
+                (&caption_colorref as *const u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            );
+            let _ = DwmSetWindowAttribute(
+                hwnd,
+                DWMWA_TEXT_COLOR,
+                (&text_colorref as *const u32).cast(),
+                std::mem::size_of::<u32>() as u32,
+            );
+        }
+    }
+
+    fn sync_native_titlebar_theme(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
+        #[cfg(target_os = "windows")]
+        {
+            if !USE_CUSTOM_WINDOW_CHROME {
+                let wants_dark = self.config.ui.dark_mode.unwrap_or(false);
+                if self.last_sync_native_titlebar_dark != Some(wants_dark) {
+                    let theme = if wants_dark {
+                        egui::SystemTheme::Dark
+                    } else {
+                        egui::SystemTheme::Light
+                    };
+                    ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(theme));
+                    self.apply_native_titlebar_colors(frame, wants_dark);
+                    self.last_sync_native_titlebar_dark = Some(wants_dark);
+                }
+            }
+        }
+        #[cfg(not(target_os = "windows"))]
+        {
+            let _ = ctx;
+            let _ = frame;
+        }
+    }
 }
 
 impl eframe::App for PgeAnalyzerApp {
     fn clear_color(&self, _visuals: &egui::Visuals) -> [f32; 4] {
-        [0.0, 0.0, 0.0, 0.0] // Transparent
+        let bg = if self.config.ui.dark_mode.unwrap_or(false) {
+            egui::Color32::from_rgb(32, 32, 32)
+        } else {
+            ui::styles::window_bg()
+        };
+        bg.to_normalized_gamma_f32()
     }
 
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    fn update(&mut self, ctx: &egui::Context, frame: &mut eframe::Frame) {
         // Enforce theme on startup or if egui resets it (e.g. system theme change)
         if ctx.style().visuals.window_fill != egui::Color32::TRANSPARENT {
             ui::apply_custom_style(ctx, self.config.ui.dark_mode);
         }
+        self.sync_native_titlebar_theme(ctx, frame);
 
-        // 1. Paint the main window background manually on the background layer
-        let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-        let rounding = if is_maximized { 0.0 } else { ui::styles::WINDOW_ROUNDING };
-        let bg_color = ui::actual_window_background(ctx);
+        if USE_CUSTOM_WINDOW_CHROME {
+            // Update resize state before painting so we can adjust background rendering
+            // while the OS is actively resizing the frameless window.
+            ui::handle_window_resize(ctx, &mut self.resize_state);
 
-        ctx.layer_painter(egui::LayerId::background()).rect_filled(
-            ctx.content_rect(),
-            egui::CornerRadius::same(rounding as u8),
-            bg_color,
-        );
+            // 1. Paint the main window background manually on the background layer
+            let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
+            let rounding = if is_maximized || self.resize_state.is_resizing() {
+                0.0
+            } else {
+                ui::styles::WINDOW_ROUNDING
+            };
+            let bg_color = ui::actual_window_background(ctx);
 
-        // 2. Border stroke removed - custom title bar handles visual boundaries
+            ctx.layer_painter(egui::LayerId::background()).rect_filled(
+                ctx.viewport_rect(),
+                egui::CornerRadius::same(rounding as u8),
+                bg_color,
+            );
 
-        ui::handle_window_resize(ctx, &mut self.resize_state);
+            // 2. Border stroke removed - custom title bar handles visual boundaries
+        }
 
         // --- Custom Panels (Transparent) ---
-        ui::render_title_bar(ctx, "PG&E Usage Analyzer");
+        if USE_CUSTOM_WINDOW_CHROME {
+            ui::render_title_bar(ctx, "PG&E Usage Analyzer");
+        }
 
         egui::SidePanel::left("sidebar_panel")
             .frame(egui::Frame::NONE.fill(egui::Color32::TRANSPARENT))
             .resizable(false)
             .default_width(150.0)
             .show(ctx, |ui| {
-                ui.add_space(20.0); // Space for top rounding
+                if USE_CUSTOM_WINDOW_CHROME {
+                    ui.add_space(20.0); // Space for top rounding
+                }
                 egui::Frame::NONE
                     .inner_margin(egui::Margin::symmetric(10, 0))
                     .show(ui, |ui| {
@@ -516,11 +628,15 @@ impl eframe::App for PgeAnalyzerApp {
                     bottom: 10,
                 }))
             .show(ctx, |ui| {
-                ui.add_space(10.0);
+                if USE_CUSTOM_WINDOW_CHROME {
+                    ui.add_space(10.0);
+                }
                 self.render_main_content(ui);
             });
 
-        self.resize_state.apply_cursor(ctx);
+        if USE_CUSTOM_WINDOW_CHROME {
+            self.resize_state.apply_cursor(ctx);
+        }
         self.handle_window_persistence(ctx);
     }
 }
@@ -555,8 +671,9 @@ fn run_app() -> Result<(), eframe::Error> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([config.window.width, config.window.height])
         .with_title("PG&E Usage Analyzer")
-        .with_decorations(false)
-        .with_transparent(true)
+        .with_decorations(!USE_CUSTOM_WINDOW_CHROME)
+        .with_transparent(false)
+        .with_has_shadow(USE_CUSTOM_WINDOW_CHROME)
         .with_min_inner_size([400.0, 300.0]);
 
     if let (Some(x), Some(y)) = (config.window.x, config.window.y) {

@@ -50,7 +50,6 @@ impl WindowResizeState {
     }
 
     /// Check if currently resizing.
-    #[allow(dead_code)]
     pub fn is_resizing(&self) -> bool {
         self.is_resizing
     }
