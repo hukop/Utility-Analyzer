@@ -1,23 +1,23 @@
 pub mod colormap;
-pub mod profile;
-pub mod daily_kwh;
-pub mod gas_daily;
-pub mod daily_heatmap;
 pub mod cost_heatmap;
-pub mod weekday_heatmap;
-pub mod heatmap_base;
+pub mod daily_heatmap;
+pub mod daily_kwh;
 pub mod export_sparklines;
+pub mod gas_daily;
+pub mod heatmap_base;
+pub mod profile;
+pub mod weekday_heatmap;
 
-pub use daily_kwh::*;
-pub use weekday_heatmap::*;
-pub use daily_heatmap::*;
 pub use cost_heatmap::*;
-pub use profile::*;
-pub use gas_daily::*;
+pub use daily_heatmap::*;
+pub use daily_kwh::*;
 pub use export_sparklines::*;
+pub use gas_daily::*;
+pub use profile::*;
+pub use weekday_heatmap::*;
 
-use std::collections::HashSet;
 use serde::{Deserialize, Serialize};
+use std::collections::HashSet;
 
 /// Available color palettes for heatmaps.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
@@ -91,27 +91,29 @@ pub struct HeatmapState {
 #[derive(Debug, Clone, Default)]
 pub struct ChartZoomState {
     /// Stores current [min_x, max_x] visible range for each chart ID
-    pub bounds: std::collections::HashMap<String, (f64, f64)>,
+    pub bounds: std::collections::HashMap<&'static str, (f64, f64)>,
 }
 
 /// Renders a daily time-series chart with zoom functionality.
 /// Used by Daily kWh and Gas Daily charts to share interaction logic.
-pub fn render_zoomable_daily_chart(
+pub fn render_zoomable_daily_chart<'a, I>(
     ui: &mut egui::Ui,
     state: &mut ChartZoomState,
-    chart_id: &str,
+    chart_id: &'static str,
     initial_bounds: (f64, f64),
-    lines: Vec<egui_plot::Line<'_>>,
-) {
-    use egui_plot::{Plot, PlotBounds};
+    lines: I,
+) where
+    I: IntoIterator<Item = egui_plot::Line<'a>>,
+{
     use chrono::DateTime;
+    use egui_plot::{Plot, PlotBounds};
 
-    let entry = state.bounds.entry(chart_id.to_string()).or_insert(initial_bounds);
+    let entry = state.bounds.entry(chart_id).or_insert(initial_bounds);
     let (start_ref, end_ref) = entry;
     let start = *start_ref;
     let end = *end_ref;
 
-    Plot::new(format!("{}_plot", chart_id))
+    Plot::new(chart_id)
         .view_aspect(2.5)
         .legend(egui_plot::Legend::default())
         .allow_zoom(true)
@@ -124,7 +126,7 @@ pub fn render_zoomable_daily_chart(
             if let Some(dt) = DateTime::from_timestamp(timestamp, 0) {
                 dt.format("%Y-%m-%d").to_string()
             } else {
-                "".to_string()
+                String::new()
             }
         })
         .label_formatter(|name, value| {
@@ -132,7 +134,7 @@ pub fn render_zoomable_daily_chart(
             let date_str = if let Some(dt) = DateTime::from_timestamp(timestamp, 0) {
                 dt.format("%Y-%m-%d").to_string()
             } else {
-                "".to_string()
+                String::new()
             };
             format!("{}: {:.2}\n{}", name, value.y, date_str)
         })
@@ -148,7 +150,9 @@ pub fn render_zoomable_daily_chart(
 
             if hovered {
                 let mods = plot_ui.ctx().input(|i| i.modifiers);
-                let scroll = plot_ui.ctx().input(|i| i.raw_scroll_delta + i.smooth_scroll_delta);
+                let scroll = plot_ui
+                    .ctx()
+                    .input(|i| i.raw_scroll_delta + i.smooth_scroll_delta);
 
                 if !mods.ctrl {
                     if scroll.y != 0.0 {
@@ -167,10 +171,10 @@ pub fn render_zoomable_daily_chart(
 
                             plot_ui.set_plot_bounds(PlotBounds::from_min_max(
                                 [new_min_x, min_y],
-                                [new_max_x, max_y]
+                                [new_max_x, max_y],
                             ));
 
-                            state.bounds.insert(chart_id.to_string(), (new_min_x, new_max_x));
+                            state.bounds.insert(chart_id, (new_min_x, new_max_x));
 
                             plot_ui.ctx().input_mut(|i| {
                                 i.raw_scroll_delta = egui::Vec2::ZERO;
@@ -179,7 +183,7 @@ pub fn render_zoomable_daily_chart(
                         }
                     }
                 } else if scroll.y != 0.0 {
-                     bounds_changed = true;
+                    bounds_changed = true;
                 }
             }
 
@@ -188,8 +192,10 @@ pub fn render_zoomable_daily_chart(
             }
 
             if bounds_changed {
-                 let final_bounds = plot_ui.plot_bounds();
-                 state.bounds.insert(chart_id.to_string(), (final_bounds.min()[0], final_bounds.max()[0]));
+                let final_bounds = plot_ui.plot_bounds();
+                state
+                    .bounds
+                    .insert(chart_id, (final_bounds.min()[0], final_bounds.max()[0]));
             }
         });
 }

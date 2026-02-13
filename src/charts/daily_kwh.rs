@@ -1,9 +1,13 @@
+use crate::charts::render_zoomable_daily_chart;
 use crate::data::ElectricData;
 use egui::Ui;
 use egui_plot::Line;
-use crate::charts::render_zoomable_daily_chart;
 
-pub fn render_daily_kwh(ui: &mut Ui, data: &ElectricData, state: &mut crate::charts::ChartZoomState) {
+pub fn render_daily_kwh(
+    ui: &mut Ui,
+    data: &ElectricData,
+    state: &mut crate::charts::ChartZoomState,
+) {
     ui.add_space(crate::ui::styles::CHART_SPACING);
 
     let Some((min_ts, max_ts)) = data.daily_chart_bounds() else {
@@ -25,6 +29,6 @@ pub fn render_daily_kwh(ui: &mut Ui, data: &ElectricData, state: &mut crate::cha
         state,
         "daily_kwh",
         (min_ts, max_ts),
-        vec![line, smooth_line]
+        [line, smooth_line],
     );
 }

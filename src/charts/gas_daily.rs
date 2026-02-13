@@ -1,7 +1,7 @@
+use crate::charts::render_zoomable_daily_chart;
 use crate::data::GasData;
 use egui::Ui;
 use egui_plot::Line;
-use crate::charts::render_zoomable_daily_chart;
 
 pub fn render_gas_daily(ui: &mut Ui, data: &GasData, state: &mut crate::charts::ChartZoomState) {
     ui.add_space(crate::ui::styles::CHART_SPACING);
@@ -25,6 +25,6 @@ pub fn render_gas_daily(ui: &mut Ui, data: &GasData, state: &mut crate::charts::
         state,
         "gas_daily",
         (min_ts, max_ts),
-        vec![line, smooth_line]
+        [line, smooth_line],
     );
 }

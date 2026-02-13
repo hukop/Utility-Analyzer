@@ -4,16 +4,16 @@
 //! A GUI application built with eframe/egui to analyze and visualize
 //! PG&E electric and natural gas usage data exported from their customer portal.
 
-mod data;
 mod charts;
-mod ui;
 mod config;
+mod data;
+mod ui;
 
 use anyhow::Result;
+use config::Config;
 use data::{ElectricData, GasData};
 use std::path::{Path, PathBuf};
 use ui::{ChartView, HeatmapMetric};
-use config::Config;
 
 #[cfg(target_os = "windows")]
 const USE_CUSTOM_WINDOW_CHROME: bool = false;
@@ -52,12 +52,13 @@ impl Default for PgeAnalyzerApp {
         if let Some(ref p) = config.ui.heatmap_palette {
             heatmap_state.palette = charts::HeatmapPalette::from_name(p);
         }
+        let current_view = ChartView::from_str(&config.ui.default_chart);
 
         Self {
-            config: config.clone(),
+            config,
             electric_data: None,
             gas_data: None,
-            current_view: ChartView::from_str(&config.ui.default_chart),
+            current_view,
             error_message: None,
             data_dir,
             heatmap_state,
@@ -160,7 +161,12 @@ impl PgeAnalyzerApp {
     }
 
     fn render_sidebar(&mut self, ui: &mut egui::Ui) {
-        ui.label(egui::RichText::new("Data Files:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
+        ui.label(
+            egui::RichText::new("Data Files:")
+                .strong()
+                .size(crate::ui::styles::SIDEBAR_SECTION_SIZE)
+                .color(ui.visuals().text_color()),
+        );
 
         if ui.button("📂 Load Electric CSV").clicked() {
             if let Some(path) = data::select_csv_file() {
@@ -169,7 +175,8 @@ impl PgeAnalyzerApp {
                         self.error_message = None;
                     }
                     Err(e) => {
-                        self.error_message = Some(format!("⚠️ Failed to Load Electric Data\n\n{}", e));
+                        self.error_message =
+                            Some(format!("⚠️ Failed to Load Electric Data\n\n{}", e));
                     }
                 }
             } else {
@@ -188,12 +195,20 @@ impl PgeAnalyzerApp {
                     }
                 }
             } else {
-                self.error_message = Some("ℹ️ No file selected\n\nPlease select a PG&E gas usage CSV file to continue.".to_string());
+                self.error_message = Some(
+                    "ℹ️ No file selected\n\nPlease select a PG&E gas usage CSV file to continue."
+                        .to_string(),
+                );
             }
         }
 
         ui.add_space(20.0);
-        ui.label(egui::RichText::new("Views:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
+        ui.label(
+            egui::RichText::new("Views:")
+                .strong()
+                .size(crate::ui::styles::SIDEBAR_SECTION_SIZE)
+                .color(ui.visuals().text_color()),
+        );
 
         let views = [
             (ChartView::DailyKwh, "📈 Daily Usage"),
@@ -205,15 +220,23 @@ impl PgeAnalyzerApp {
         ];
 
         for (view, label) in views {
-            if ui.selectable_label(self.current_view == view, label).clicked() {
-                self.current_view = view.clone();
+            if ui
+                .selectable_label(self.current_view == view, label)
+                .clicked()
+            {
+                self.current_view = view;
                 self.config.ui.default_chart = view.to_string();
                 let _ = self.config.save();
             }
         }
 
         ui.add_space(20.0);
-        ui.label(egui::RichText::new("Preferences:").strong().size(crate::ui::styles::SIDEBAR_SECTION_SIZE).color(ui.visuals().text_color()));
+        ui.label(
+            egui::RichText::new("Preferences:")
+                .strong()
+                .size(crate::ui::styles::SIDEBAR_SECTION_SIZE)
+                .color(ui.visuals().text_color()),
+        );
 
         let mut dark_mode = self.config.ui.dark_mode.unwrap_or(false);
         if ui.checkbox(&mut dark_mode, "🌙 Dark Mode").changed() {
@@ -223,14 +246,21 @@ impl PgeAnalyzerApp {
         }
 
         ui.add_space(8.0);
-        ui.label(egui::RichText::new("Heatmap Palette:").size(12.0).color(ui.visuals().text_color().gamma_multiply(0.8)));
+        ui.label(
+            egui::RichText::new("Heatmap Palette:")
+                .size(12.0)
+                .color(ui.visuals().text_color().gamma_multiply(0.8)),
+        );
 
         egui::ComboBox::from_id_salt("palette_sel")
             .selected_text(self.heatmap_state.palette.name())
             .width(ui.available_width())
             .show_ui(ui, |ui| {
                 for p in charts::HeatmapPalette::all() {
-                    if ui.selectable_value(&mut self.heatmap_state.palette, *p, p.name()).clicked() {
+                    if ui
+                        .selectable_value(&mut self.heatmap_state.palette, *p, p.name())
+                        .clicked()
+                    {
                         self.config.ui.heatmap_palette = Some(p.name().to_string());
                         let _ = self.config.save();
                     }
@@ -275,12 +305,16 @@ impl PgeAnalyzerApp {
                             ui.vertical(|ui| {
                                 ui.heading("Daily Heatmap");
                             });
-                             // Right half - toggle buttons (remaining width)
+                            // Right half - toggle buttons (remaining width)
                             ui.vertical(|ui| {
                                 // Position buttons at top of right half, same level as heading
-                                Self::render_heatmap_toggle_buttons(ui, heatmap_metric, |new_metric| {
-                                    heatmap_metric = new_metric;
-                                });
+                                Self::render_heatmap_toggle_buttons(
+                                    ui,
+                                    heatmap_metric,
+                                    |new_metric| {
+                                        heatmap_metric = new_metric;
+                                    },
+                                );
                             });
                         });
                         ui.add_space(4.0);
@@ -333,11 +367,11 @@ impl PgeAnalyzerApp {
     fn render_heatmap_toggle_buttons(
         ui: &mut egui::Ui,
         current_metric: HeatmapMetric,
-        mut on_toggle: impl FnMut(HeatmapMetric)
+        mut on_toggle: impl FnMut(HeatmapMetric),
     ) {
         ui.horizontal(|ui| {
             // Add space to push buttons to the right, but closer to center
-            ui.add_space(ui.available_width()*3.0/4.0);
+            ui.add_space(ui.available_width() * 3.0 / 4.0);
 
             let button_size = egui::vec2(60.0, 28.0);
             let overlap = 10.0;
@@ -349,10 +383,12 @@ impl PgeAnalyzerApp {
                 egui::Sense::hover(),
             );
 
-            let energy_rect =
-                egui::Rect::from_min_size(toggle_rect.min, button_size);
+            let energy_rect = egui::Rect::from_min_size(toggle_rect.min, button_size);
             let cost_rect = egui::Rect::from_min_size(
-                egui::pos2(toggle_rect.min.x + button_size.x - overlap, toggle_rect.min.y),
+                egui::pos2(
+                    toggle_rect.min.x + button_size.x - overlap,
+                    toggle_rect.min.y,
+                ),
                 button_size,
             );
 
@@ -478,8 +514,8 @@ impl PgeAnalyzerApp {
         use raw_window_handle::{HasWindowHandle as _, RawWindowHandle};
         use windows::Win32::Foundation::HWND;
         use windows::Win32::Graphics::Dwm::{
-            DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR, DWMWA_USE_IMMERSIVE_DARK_MODE,
-            DwmSetWindowAttribute,
+            DwmSetWindowAttribute, DWMWA_CAPTION_COLOR, DWMWA_TEXT_COLOR,
+            DWMWA_USE_IMMERSIVE_DARK_MODE,
         };
 
         let Ok(window_handle) = frame.window_handle() else {
@@ -497,16 +533,18 @@ impl PgeAnalyzerApp {
         } else {
             ui::styles::window_bg()
         };
-        let caption_colorref =
-            u32::from(caption_color.r()) | (u32::from(caption_color.g()) << 8) | (u32::from(caption_color.b()) << 16);
+        let caption_colorref = u32::from(caption_color.r())
+            | (u32::from(caption_color.g()) << 8)
+            | (u32::from(caption_color.b()) << 16);
 
         let text_color = if dark_mode {
             egui::Color32::from_rgb(255, 255, 255)
         } else {
             egui::Color32::from_rgb(0, 0, 0)
         };
-        let text_colorref =
-            u32::from(text_color.r()) | (u32::from(text_color.g()) << 8) | (u32::from(text_color.b()) << 16);
+        let text_colorref = u32::from(text_color.r())
+            | (u32::from(text_color.g()) << 8)
+            | (u32::from(text_color.b()) << 16);
 
         let immersive_dark: i32 = if dark_mode { 1 } else { 0 };
 
@@ -619,14 +657,16 @@ impl eframe::App for PgeAnalyzerApp {
             });
 
         egui::CentralPanel::default()
-            .frame(egui::Frame::NONE
-                .fill(egui::Color32::TRANSPARENT)
-                .inner_margin(egui::Margin {
-                    left: 10,
-                    right: 10,
-                    top: 0,
-                    bottom: 10,
-                }))
+            .frame(
+                egui::Frame::NONE
+                    .fill(egui::Color32::TRANSPARENT)
+                    .inner_margin(egui::Margin {
+                        left: 10,
+                        right: 10,
+                        top: 0,
+                        bottom: 10,
+                    }),
+            )
             .show(ctx, |ui| {
                 if USE_CUSTOM_WINDOW_CHROME {
                     ui.add_space(10.0);

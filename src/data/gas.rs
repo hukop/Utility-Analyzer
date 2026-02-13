@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use egui_plot::PlotPoint;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 
 /// A single data point representing gas usage cost on a specific date.
 #[derive(Debug, Clone)]
@@ -37,44 +37,66 @@ impl GasData {
     /// If multiple CSVs are provided, data is merged. In case of overlapping
     /// dates, the firstOccurrence preference is given.
     pub fn load(csv_contents: &[String]) -> Result<Self> {
-        let mut merged_data: std::collections::BTreeMap<DateTime<Utc>, GasDataPoint> = std::collections::BTreeMap::new();
+        let mut merged_data: BTreeMap<DateTime<Utc>, GasDataPoint> = BTreeMap::new();
         let mut col_indices = None;
 
         super::loader::for_each_record(csv_contents, |headers, record| {
             if col_indices.is_none() {
                 col_indices = Some((
-                    headers.iter().position(|h| h == "TYPE").context("TYPE column missing")?,
-                    headers.iter().position(|h| h == "DATE").context("DATE column missing")?,
-                    headers.iter().position(|h| h == "COST").context("COST column missing")?,
+                    headers
+                        .iter()
+                        .position(|h| h == "TYPE")
+                        .context("TYPE column missing")?,
+                    headers
+                        .iter()
+                        .position(|h| h == "DATE")
+                        .context("DATE column missing")?,
+                    headers
+                        .iter()
+                        .position(|h| h == "COST")
+                        .context("COST column missing")?,
                 ));
             }
 
             let (type_i, date_i, cost_i) = col_indices.unwrap();
 
-            if !record.get(type_i).map(|s| s.contains("Natural gas usage")).unwrap_or(false) {
+            if !record
+                .get(type_i)
+                .map(|s| s.contains("Natural gas usage"))
+                .unwrap_or(false)
+            {
                 return Ok(());
             }
 
             let date_str = record.get(date_i).context("DATE field missing")?;
-            let date = chrono::NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
-                .or_else(|_| chrono::NaiveDate::parse_from_str(date_str, "%m/%d/%Y"))
+            let date = NaiveDate::parse_from_str(date_str, "%Y-%m-%d")
+                .or_else(|_| NaiveDate::parse_from_str(date_str, "%m/%d/%Y"))
                 .with_context(|| format!("Failed to parse date: {}", date_str))?;
 
-            let timestamp = DateTime::<Utc>::from_naive_utc_and_offset(
-                date.and_hms_opt(0, 0, 0).unwrap(), Utc);
+            let timestamp =
+                DateTime::<Utc>::from_naive_utc_and_offset(date.and_hms_opt(0, 0, 0).unwrap(), Utc);
 
-            if merged_data.contains_key(&timestamp) {
-                return Ok(());
+            match merged_data.entry(timestamp) {
+                std::collections::btree_map::Entry::Occupied(_) => return Ok(()),
+                std::collections::btree_map::Entry::Vacant(slot) => {
+                    let cost: f64 = record
+                        .get(cost_i)
+                        .context("COST missing")?
+                        .trim_start_matches('$')
+                        .parse()
+                        .context("Invalid cost")?;
+
+                    slot.insert(GasDataPoint {
+                        date: timestamp,
+                        cost,
+                    });
+                }
             }
 
-            let cost: f64 = record.get(cost_i).context("COST missing")?.trim_start_matches('$').parse().context("Invalid cost")?;
-
-            merged_data.insert(timestamp, GasDataPoint { date: timestamp, cost });
             Ok(())
         })?;
 
         let data: Vec<GasDataPoint> = merged_data.into_values().collect();
-        // BTreeMap is already sorted by date
 
         let mut this = Self {
             data,
@@ -110,25 +132,19 @@ impl GasData {
     }
 
     fn compute_daily_totals_from_points(data: &[GasDataPoint]) -> Vec<(DateTime<Utc>, f64)> {
-        let mut daily: HashMap<String, f64> = HashMap::new();
+        let mut daily: BTreeMap<NaiveDate, f64> = BTreeMap::new();
 
         for point in data {
-            let date_key = point.date.format("%Y-%m-%d").to_string();
-            *daily.entry(date_key).or_insert(0.0) += point.cost;
+            *daily.entry(point.date.date_naive()).or_insert(0.0) += point.cost;
         }
 
-        let mut result: Vec<_> = daily
+        daily
             .into_iter()
             .filter_map(|(date, cost)| {
-                chrono::NaiveDate::parse_from_str(&date, "%Y-%m-%d")
-                    .ok()
-                    .and_then(|d: chrono::NaiveDate| d.and_hms_opt(0, 0, 0))
-                    .map(|dt: chrono::NaiveDateTime| (dt.and_utc(), cost))
+                date.and_hms_opt(0, 0, 0)
+                    .map(|dt| (DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc), cost))
             })
-            .collect();
-
-        result.sort_by_key(|(dt, _)| *dt);
-        result
+            .collect()
     }
 
     fn compute_rolling_average(
@@ -177,7 +193,8 @@ mod tests {
     fn test_gas_data_load() {
         let csv = "TYPE,DATE,COST\n\
                   Natural gas usage,2023-01-01,$5.50\n\
-                  Natural gas usage,2023-01-02,$6.20".to_string();
+                  Natural gas usage,2023-01-02,$6.20"
+            .to_string();
 
         let result = GasData::load(&[csv]).unwrap();
         assert_eq!(result.data.len(), 2);
@@ -188,7 +205,8 @@ mod tests {
     #[test]
     fn test_gas_data_load_alternate_date_format() {
         let csv = "TYPE,DATE,COST\n\
-                  Natural gas usage,01/01/2023,$5.50".to_string();
+                  Natural gas usage,01/01/2023,$5.50"
+            .to_string();
 
         let result = GasData::load(&[csv]).unwrap();
         assert_eq!(result.data.len(), 1);

@@ -6,29 +6,59 @@ use std::path::{Path, PathBuf};
 
 const HEADER_PATTERN: &str = "TYPE,DATE,START TIME";
 
+fn is_header_line(line: &str) -> bool {
+    let trimmed = line.trim_start();
+    trimmed
+        .get(..HEADER_PATTERN.len())
+        .map(|prefix| prefix.eq_ignore_ascii_case(HEADER_PATTERN))
+        .unwrap_or(false)
+}
+
 /// Reads a CSV file and strips leading metadata by searching for the header row.
 ///
 /// The function looks for a line starting with "TYPE,DATE,START TIME" (case-insensitive)
 /// and returns the content starting from that line.
 pub fn read_csv_with_header(path: &Path) -> Result<String> {
-    let file = File::open(path)
-        .with_context(|| format!("Failed to open file: {}\nPlease check:\n• The file exists and is accessible\n• You have permission to read the file\n• The file is not currently open in another program", path.display()))?;
+    let file = File::open(path).with_context(|| {
+        format!(
+            "Failed to open file: {}\nPlease check:\n- The file exists and is accessible\n- You have permission to read the file\n- The file is not currently open in another program",
+            path.display()
+        )
+    })?;
 
     let reader = BufReader::new(file);
-    let lines: Vec<String> = reader.lines().collect::<Result<_, _>>()
-        .with_context(|| format!("Failed to read file: {}\nPlease check:\n• The file is a valid text file\n• The file encoding is supported (UTF-8 recommended)", path.display()))?;
+    let mut found_header = false;
+    let mut output = String::new();
 
-    // Find header line
-    let header_idx = lines
-        .iter()
-        .position(|line| line.trim().to_uppercase().starts_with(HEADER_PATTERN))
-        .context(format!(
-            "Could not find valid PG&E header in file: {}\n\nExpected header containing: '{}'\n\nPlease ensure:\n• This is a valid PG&E export file\n• The file contains the required header row\n• The file format matches PG&E's standard export",
-            path.display(), HEADER_PATTERN
-        ))?;
+    for line_result in reader.lines() {
+        let line = line_result.with_context(|| {
+            format!(
+                "Failed to read file: {}\nPlease check:\n- The file is a valid text file\n- The file encoding is supported (UTF-8 recommended)",
+                path.display()
+            )
+        })?;
 
-    // Return CSV content from header onwards
-    Ok(lines[header_idx..].join("\n"))
+        if !found_header {
+            found_header = is_header_line(&line);
+        }
+
+        if found_header {
+            if !output.is_empty() {
+                output.push('\n');
+            }
+            output.push_str(&line);
+        }
+    }
+
+    if !found_header {
+        anyhow::bail!(
+            "Could not find valid PG&E header in file: {}\n\nExpected header containing: '{}'\n\nPlease ensure:\n- This is a valid PG&E export file\n- The file contains the required header row\n- The file format matches PG&E's standard export",
+            path.display(),
+            HEADER_PATTERN
+        );
+    }
+
+    Ok(output)
 }
 
 /// Automatically finds all CSV files in the given directory that match the pattern.
@@ -38,14 +68,15 @@ pub fn autodetect_csv_files(dir: &Path, pattern: &str) -> Vec<PathBuf> {
             .filter_map(|e| e.ok())
             .map(|e| e.path())
             .filter(|p| {
-                p.file_name()
-                    .and_then(|n| n.to_str())
-                    .map(|s| {
-                        // Must contain pattern, end with .csv, and not be a lock file
-                        s.contains(pattern)
-                            && s.to_lowercase().ends_with(".csv")
-                            && !s.starts_with(".~lock.")
-                    })
+                let file_name = p.file_name().and_then(|n| n.to_str());
+                let is_csv = p
+                    .extension()
+                    .and_then(|e| e.to_str())
+                    .map(|ext| ext.eq_ignore_ascii_case("csv"))
+                    .unwrap_or(false);
+
+                file_name
+                    .map(|s| s.contains(pattern) && is_csv && !s.starts_with(".~lock."))
                     .unwrap_or(false)
             })
             .collect();
