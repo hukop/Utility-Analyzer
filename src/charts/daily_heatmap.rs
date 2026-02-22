@@ -91,22 +91,35 @@ fn render_heat_legend(
     unit: &str,
     palette: crate::charts::HeatmapPalette,
 ) {
-    ui.label(
-        egui::RichText::new(format!("0 to {:.1} {}", max_val, unit))
-            .size(11.0)
-            .color(ui.visuals().text_color().gamma_multiply(0.75)),
-    );
-    ui.add_space(8.0);
-    ui.horizontal(|ui| {
-        ui.spacing_mut().item_spacing = egui::vec2(1.0, 0.0);
-        for i in 0..10 {
-            let t0 = i as f64 / 10.0;
-            let t1 = (i + 1) as f64 / 10.0;
-            let v = (t0 + t1) * 0.5 * max_val;
-            let color = crate::charts::colormap::get_heatmap_color(v, 0.0, max_val, palette);
-            let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 10.0), egui::Sense::hover());
-            ui.painter().rect_filled(rect, 1.0, color);
-        }
+    let rect = ui.available_rect_before_wrap();
+
+    // Color blocks on the left of the legend slot
+    let blocks_rect = egui::Rect::from_min_size(rect.min, egui::vec2(90.0, rect.height()));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(blocks_rect), |ui| {
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.spacing_mut().item_spacing.x = 1.0;
+            for i in 0..10 {
+                let t0 = i as f64 / 10.0;
+                let t1 = (i + 1) as f64 / 10.0;
+                let v = (t0 + t1) * 0.5 * max_val;
+                let color = crate::charts::colormap::get_heatmap_color(v, 0.0, max_val, palette);
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 10.0), egui::Sense::hover());
+                ui.painter().rect_filled(rect, 1.0, color);
+            }
+        });
+    });
+
+    // Label on the right ([0 to X unit])
+    let label_x = rect.min.x + 98.0; // 90px blocks + 8px spacer
+    let label_rect = egui::Rect::from_min_size(egui::pos2(label_x, rect.min.y), egui::vec2(90.0, rect.height()));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(label_rect), |ui| {
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.label(
+                egui::RichText::new(format!("0 to {:.1} {}", max_val, unit))
+                    .size(11.0)
+                    .color(ui.visuals().text_color().gamma_multiply(0.75)),
+            );
+        });
     });
 }
 
@@ -116,15 +129,13 @@ pub fn render_daily_heatmap_with_toggle(
     state: &mut HeatmapState,
     metric: &mut HeatmapMetric,
     range_preset: DateRangePreset,
+    modern_ui: bool,
 ) {
     let title = match *metric {
         HeatmapMetric::Energy => "Daily kWh Heatmap: Day (rows) vs Hour (columns)",
         HeatmapMetric::Cost => "Daily Cost ($) Heatmap: Day (rows) vs Hour (columns)",
     };
-    let selection_text = match *metric {
-        HeatmapMetric::Energy => "Click and drag to select a range to view total kWh",
-        HeatmapMetric::Cost => "Click and drag to select a range to view total Cost",
-    };
+    let selection_text = "Click and drag to select a range to view totals";
     let (legend_max, legend_unit) = match *metric {
         HeatmapMetric::Energy => (6.0, "kWh"),
         HeatmapMetric::Cost => (2.0, "$"),
@@ -133,24 +144,63 @@ pub fn render_daily_heatmap_with_toggle(
 
     ui.heading(title);
     ui.add_space(4.0);
-    ui.horizontal(|ui| {
-        ui.label(selection_text);
-        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-            render_heat_legend(ui, legend_max, legend_unit, state.palette);
-            ui.add_space(12.0);
+
+    let row_rect = ui.available_rect_before_wrap();
+    let right = row_rect.max.x;
+    let left = row_rect.min.x;
+    let top = row_rect.min.y;
+
+    // Slot 1: Selection guidance text (Anchored to Left, Force Left Alignment)
+    let label_rect = egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(380.0, 28.0));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(label_rect), |ui| {
+        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+            ui.label(selection_text);
+        });
+    });
+
+    // Slot 3: Legend (Anchored to Right Edge)
+    let legend_width = 185.0;
+    let legend_rect = egui::Rect::from_min_size(egui::pos2(right - legend_width, top), egui::vec2(legend_width, 28.0));
+    ui.scope_builder(egui::UiBuilder::new().max_rect(legend_rect), |ui| {
+        render_heat_legend(ui, legend_max, legend_unit, state.palette);
+    });
+
+    // Slot 2: Metric Toggle (Middle-Right, Anchored relative to Legend)
+    let buttons_width = 140.0;
+    let buttons_gap = 24.0;
+    let buttons_x = right - legend_width - buttons_gap - buttons_width;
+    let mut buttons_rect = egui::Rect::from_min_size(egui::pos2(buttons_x, top), egui::vec2(buttons_width, 28.0));
+
+    if modern_ui {
+        buttons_rect = buttons_rect.translate(egui::vec2(0.0, toggle_y_offset));
+    }
+
+    ui.scope_builder(egui::UiBuilder::new().max_rect(buttons_rect), |ui| {
+        if modern_ui {
+            let options = [
+                (HeatmapMetric::Energy, "Energy"),
+                (HeatmapMetric::Cost, "Cost"),
+            ];
+            crate::ui::components::render_segmented_control(ui, metric, &options);
+        } else {
             render_heatmap_toggle_buttons(
                 ui,
                 *metric,
                 |new_metric| *metric = new_metric,
-                toggle_y_offset,
+                0.0,
             );
-        });
+        }
     });
-    ui.add_space(6.0);
+
+    // Advance cursor past the header row (28px height + spacing)
+    ui.advance_cursor_after_rect(egui::Rect::from_min_size(row_rect.min, egui::vec2(row_rect.width(), 32.0)));
+    ui.add_space(8.0);
 
     match *metric {
-        HeatmapMetric::Energy => render_daily_heatmap(ui, data, state, range_preset),
-        HeatmapMetric::Cost => crate::charts::render_cost_heatmap(ui, data, state, range_preset),
+        HeatmapMetric::Energy => render_daily_heatmap(ui, data, state, range_preset, modern_ui),
+        HeatmapMetric::Cost => {
+            crate::charts::render_cost_heatmap(ui, data, state, range_preset, modern_ui)
+        }
     }
 }
 
@@ -159,8 +209,9 @@ pub fn render_daily_heatmap(
     data: &ElectricData,
     state: &mut HeatmapState,
     range_preset: DateRangePreset,
+    modern: bool,
 ) {
-    render_daily_heatmap_with_selection_label(ui, data, state, "", range_preset);
+    render_daily_heatmap_with_selection_label(ui, data, state, "", range_preset, modern);
 }
 
 fn render_daily_heatmap_with_selection_label(
@@ -169,6 +220,7 @@ fn render_daily_heatmap_with_selection_label(
     state: &mut HeatmapState,
     selection_label: &'static str,
     range_preset: DateRangePreset,
+    modern: bool,
 ) {
     let (dates, heatmap_data, daily_sums, date_meta) =
         data.daily_hour_heatmap_filtered(range_preset);
@@ -190,6 +242,7 @@ fn render_daily_heatmap_with_selection_label(
         max_value_override: Some(6.0),
         daily_sums: Some(daily_sums),
         date_meta: Some(date_meta),
+        modern,
     };
 
     render_heatmap_component(ui, dates, heatmap_data, state, config);

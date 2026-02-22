@@ -335,8 +335,16 @@ impl PgeAnalyzerApp {
                     let range_enabled =
                         self.is_range_enabled_view() && self.electric_data.is_some();
                     ui.add_enabled_ui(range_enabled, |ui| {
-                        for preset in DateRangePreset::all() {
-                            ui.selectable_value(&mut self.range_preset, *preset, preset.label());
+                        if self.config.ui.modern_ui {
+                            let options: Vec<_> = DateRangePreset::all()
+                                .iter()
+                                .map(|p| (*p, p.label()))
+                                .collect();
+                            ui::components::render_segmented_control(ui, &mut self.range_preset, &options);
+                        } else {
+                            for preset in DateRangePreset::all() {
+                                ui.selectable_value(&mut self.range_preset, *preset, preset.label());
+                            }
                         }
                     });
 
@@ -453,6 +461,8 @@ impl PgeAnalyzerApp {
             return;
         }
 
+        let modern = self.config.ui.modern_ui;
+
         ui.label(
             egui::RichText::new("Data Files")
                 .strong()
@@ -460,27 +470,27 @@ impl PgeAnalyzerApp {
                 .color(ui.visuals().text_color()),
         );
 
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("⚡")
-                    .size(18.0)
-                    .color(egui::Color32::from_rgb(255, 210, 80)),
-            );
-            if ui.button("Load Electric CSV").clicked() {
-                self.pick_and_load_electric();
-            }
-        });
+        if ui::components::render_sidebar_item(
+            ui,
+            false,
+            "⚡",
+            egui::Color32::from_rgb(255, 210, 80),
+            "Load Electric CSV",
+            modern,
+        ) {
+            self.pick_and_load_electric();
+        }
 
-        ui.horizontal(|ui| {
-            ui.label(
-                egui::RichText::new("🔥")
-                    .size(18.0)
-                    .color(egui::Color32::from_rgb(255, 120, 90)),
-            );
-            if ui.button("Load Gas CSV").clicked() {
-                self.pick_and_load_gas();
-            }
-        });
+        if ui::components::render_sidebar_item(
+            ui,
+            false,
+            "🔥",
+            egui::Color32::from_rgb(255, 120, 90),
+            "Load Gas CSV",
+            modern,
+        ) {
+            self.pick_and_load_gas();
+        }
 
         ui.add_space(16.0);
         ui.label(
@@ -501,15 +511,16 @@ impl PgeAnalyzerApp {
 
         for view in views {
             let (icon, color, label) = Self::view_icon(view);
-            ui.horizontal(|ui| {
-                ui.label(egui::RichText::new(icon).size(18.0).color(color));
-                if ui
-                    .selectable_label(self.current_view == view, label)
-                    .clicked()
-                {
-                    self.set_view(view);
-                }
-            });
+            if ui::components::render_sidebar_item(
+                ui,
+                self.current_view == view,
+                icon,
+                color,
+                label,
+                modern,
+            ) {
+                self.set_view(view);
+            }
         }
 
         ui.add_space(16.0);
@@ -525,7 +536,7 @@ impl PgeAnalyzerApp {
             .checkbox(
                 &mut dark_mode,
                 egui::RichText::new("🌙 Dark Mode")
-                    .size(14.0)
+                    .size(13.0)
                     .color(egui::Color32::from_rgb(170, 190, 255)),
             )
             .changed()
@@ -533,6 +544,16 @@ impl PgeAnalyzerApp {
             self.config.ui.dark_mode = Some(dark_mode);
             let _ = self.config.save();
             ui::apply_custom_style(ui.ctx(), Some(dark_mode));
+        }
+
+        if ui
+            .checkbox(
+                &mut self.config.ui.modern_ui,
+                egui::RichText::new("✨ Modern UI").size(13.0),
+            )
+            .changed()
+        {
+            let _ = self.config.save();
         }
 
         ui.add_space(8.0);
@@ -568,7 +589,7 @@ impl PgeAnalyzerApp {
             ChartView::DailyKwh => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Daily kWh");
-                    ui::components::Card::new().show(ui, |ui| {
+                    ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
                         charts::render_daily_kwh(ui, data, &mut self.zoom_state);
                     });
                 } else {
@@ -577,8 +598,13 @@ impl PgeAnalyzerApp {
             }
             ChartView::WeekdayHeatmap => {
                 if let Some(ref data) = self.electric_data {
-                    ui::components::Card::new().show(ui, |ui| {
-                        charts::render_weekday_heatmap(ui, data, &mut self.heatmap_state);
+                    ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
+                        charts::render_weekday_heatmap(
+                            ui,
+                            data,
+                            &mut self.heatmap_state,
+                            self.config.ui.modern_ui,
+                        );
                     });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -586,13 +612,14 @@ impl PgeAnalyzerApp {
             }
             ChartView::DailyHeatmap => {
                 if let Some(data) = self.electric_data.as_ref() {
-                    ui::components::Card::new().show(ui, |ui| {
+                    ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
                         charts::render_daily_heatmap_with_toggle(
                             ui,
                             data,
                             &mut self.heatmap_state,
                             &mut self.heatmap_metric,
                             self.range_preset,
+                            self.config.ui.modern_ui,
                         );
                     });
                 } else {
@@ -602,7 +629,7 @@ impl PgeAnalyzerApp {
             ChartView::HourlyProfile => {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Average Daily Profile (Mean kWh by Hour)");
-                    ui::components::Card::new().show(ui, |ui| {
+                    ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
                         charts::render_hourly_profile(ui, data);
                     });
                 } else {
@@ -611,12 +638,13 @@ impl PgeAnalyzerApp {
             }
             ChartView::ExportSparklines => {
                 if let Some(ref data) = self.electric_data {
-                    ui::components::Card::new().show(ui, |ui| {
+                    ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
                         charts::render_export_sparklines(
                             ui,
                             data,
                             &mut self.heatmap_state,
                             self.range_preset,
+                            self.config.ui.modern_ui,
                         );
                     });
                 } else {
@@ -626,7 +654,7 @@ impl PgeAnalyzerApp {
             ChartView::GasDaily => {
                 if let Some(ref data) = self.gas_data {
                     ui.heading("Gas: Daily Usage (USD)");
-                    ui::components::Card::new().show(ui, |ui| {
+                    ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
                         charts::render_gas_daily(ui, data, &mut self.zoom_state);
                     });
                 } else {

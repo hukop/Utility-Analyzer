@@ -8,8 +8,9 @@ pub fn render_cost_heatmap(
     data: &ElectricData,
     state: &mut HeatmapState,
     range_preset: DateRangePreset,
+    modern: bool,
 ) {
-    render_cost_heatmap_with_selection_label(ui, data, state, "", range_preset);
+    render_cost_heatmap_with_selection_label(ui, data, state, "", range_preset, modern);
 }
 
 pub(crate) fn render_cost_heatmap_with_selection_label(
@@ -18,6 +19,7 @@ pub(crate) fn render_cost_heatmap_with_selection_label(
     state: &mut HeatmapState,
     selection_label: &'static str,
     range_preset: DateRangePreset,
+    modern: bool,
 ) {
     let (dates, heatmap_data, daily_sums, date_meta) =
         data.daily_hour_cost_heatmap_filtered(range_preset);
@@ -39,6 +41,7 @@ pub(crate) fn render_cost_heatmap_with_selection_label(
         max_value_override: Some(2.0),
         daily_sums: Some(daily_sums),
         date_meta: Some(date_meta),
+        modern,
     };
 
     render_heatmap_component(ui, dates, heatmap_data, state, config);

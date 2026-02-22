@@ -9,6 +9,7 @@ pub fn render_export_sparklines(
     data: &ElectricData,
     state: &mut HeatmapState,
     range_preset: DateRangePreset,
+    modern: bool,
 ) {
     let (dates, export_data, daily_sums, max_val, date_meta) =
         data.daily_daytime_export_data_filtered(range_preset);
@@ -59,6 +60,7 @@ pub fn render_export_sparklines(
                             is_collapsed,
                             summary: None,
                             show_icon: true,
+                            modern,
                         },
                     ) {
                         clicked = true;
@@ -76,6 +78,7 @@ pub fn render_export_sparklines(
                             is_collapsed,
                             summary: Some(format!("Year Total: {:.1} kWh", sum)),
                             show_icon: false,
+                            modern,
                         },
                     ) {
                         clicked = true;
@@ -117,6 +120,7 @@ pub fn render_export_sparklines(
                             is_collapsed,
                             summary: None,
                             show_icon: true,
+                            modern,
                         },
                     ) {
                         clicked = true;
@@ -134,6 +138,7 @@ pub fn render_export_sparklines(
                             is_collapsed,
                             summary: Some(format!("Total: {:.2} kWh", sum)),
                             show_icon: false,
+                            modern,
                         },
                     ) {
                         clicked = true;

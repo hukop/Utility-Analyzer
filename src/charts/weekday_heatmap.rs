@@ -26,7 +26,12 @@ fn empty_sums() -> &'static HashMap<String, f64> {
     EMPTY_SUMS.get_or_init(HashMap::new)
 }
 
-pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut HeatmapState) {
+pub fn render_weekday_heatmap(
+    ui: &mut Ui,
+    data: &ElectricData,
+    state: &mut HeatmapState,
+    modern: bool,
+) {
     let dates = weekday_labels();
     let heatmap_data = data.weekday_hour_heatmap_cached();
 
@@ -47,6 +52,7 @@ pub fn render_weekday_heatmap(ui: &mut Ui, data: &ElectricData, state: &mut Heat
         max_value_override: Some(data.weekday_hour_heatmap_max_cached()),
         daily_sums: None,
         date_meta: None,
+        modern,
     };
 
     render_heatmap_component(ui, dates, heatmap_data, state, config);

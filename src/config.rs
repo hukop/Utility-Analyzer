@@ -41,6 +41,8 @@ pub struct UiConfig {
     pub font_scale: f32,
     /// Heatmap color palette
     pub heatmap_palette: Option<String>,
+    /// Whether to use the modern UI style
+    pub modern_ui: bool,
 }
 
 impl Default for Config {
@@ -61,6 +63,7 @@ impl Default for Config {
                 dark_mode: None,
                 font_scale: 1.0,
                 heatmap_palette: Some("Viridis".to_string()),
+                modern_ui: true,
             },
         }
     }

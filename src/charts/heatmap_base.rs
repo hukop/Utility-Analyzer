@@ -19,6 +19,7 @@ pub struct HeatmapConfig<'a> {
     pub max_value_override: Option<f64>,
     pub daily_sums: Option<&'a [f64]>,
     pub date_meta: Option<&'a [DailyDateMetadata]>,
+    pub modern: bool,
 }
 
 pub fn render_heatmap_component(
@@ -203,6 +204,7 @@ pub fn render_heatmap_component(
                                     is_collapsed,
                                     summary: None,
                                     show_icon: true,
+                                    modern: config.modern,
                                 },
                             ) {
                                 if is_collapsed {
@@ -233,6 +235,7 @@ pub fn render_heatmap_component(
                                     is_collapsed,
                                     summary: None,
                                     show_icon: true,
+                                    modern: config.modern,
                                 },
                             ) {
                                 if is_collapsed {
@@ -350,6 +353,7 @@ pub fn render_heatmap_component(
                                     is_collapsed,
                                     summary: Some(val_text),
                                     show_icon: false,
+                                    modern: config.modern,
                                 },
                             ) {
                                 if is_collapsed {
@@ -388,6 +392,7 @@ pub fn render_heatmap_component(
                                     is_collapsed,
                                     summary: Some(val_text),
                                     show_icon: false,
+                                    modern: config.modern,
                                 },
                             ) {
                                 if is_collapsed {
