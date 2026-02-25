@@ -2,6 +2,10 @@
 
 A modern, cross-platform GUI application for visualizing PG&E electric and gas usage data, built with Rust.
 
+<div align="center">
+  <img src="assets/images/screenshot_main.png" alt="Main Dashboard" width="800">
+</div>
+
 ## Features
 
 - **6 Interactive Charts**:
