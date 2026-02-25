@@ -31,9 +31,10 @@ pub fn render_weekday_heatmap(
     data: &ElectricData,
     state: &mut HeatmapState,
     modern: bool,
+    preset: crate::data::DateRangePreset,
 ) {
     let dates = weekday_labels();
-    let heatmap_data = data.weekday_hour_heatmap_cached();
+    let (heatmap_data, max_val) = data.weekday_hour_heatmap_filtered(preset);
 
     let config = HeatmapConfig {
         id: "weekday_heatmap",
@@ -49,11 +50,11 @@ pub fn render_weekday_heatmap(
         monthly_sums: empty_sums(),
         yearly_sums: empty_sums(),
         daily_sum_width: 0.0,
-        max_value_override: Some(data.weekday_hour_heatmap_max_cached()),
+        max_value_override: Some(max_val),
         daily_sums: None,
         date_meta: None,
         modern,
     };
 
-    render_heatmap_component(ui, dates, heatmap_data, state, config);
+    render_heatmap_component(ui, dates, &heatmap_data, state, config);
 }

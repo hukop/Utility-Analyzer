@@ -169,19 +169,33 @@ impl GasData {
         result
     }
 
-    /// Returns plot-ready points for daily charts without per-frame allocation.
-    pub fn daily_plot_points_cached(&self) -> &[PlotPoint] {
-        &self.daily_points_cache
-    }
+    /// Returns plot-ready points and 7-day average points filtered by the preset range.
+    pub fn daily_plot_points_filtered(&self, preset: crate::data::DateRangePreset) -> (&[PlotPoint], &[PlotPoint], Option<(f64, f64)>) {
+        if self.daily_totals_cache.is_empty() {
+            return (&[], &[], None);
+        }
 
-    /// Returns plot-ready 7-day average points without per-frame allocation.
-    pub fn daily_avg7_plot_points_cached(&self) -> &[PlotPoint] {
-        &self.daily_avg7_points_cache
-    }
+        let latest = self.daily_totals_cache.last().unwrap().0.date_naive();
+        if let Some(start_date) = preset.start_date(latest) {
+            let start_idx = self
+                .daily_totals_cache
+                .iter()
+                .position(|(dt, _)| dt.date_naive() >= start_date)
+                .unwrap_or(0);
 
-    /// Returns x-bounds for daily charts.
-    pub fn daily_chart_bounds(&self) -> Option<(f64, f64)> {
-        self.daily_bounds_cache
+            let bounds = if start_idx < self.daily_totals_cache.len() {
+                Some((
+                    self.daily_totals_cache[start_idx].0.timestamp() as f64,
+                    self.daily_totals_cache.last().unwrap().0.timestamp() as f64,
+                ))
+            } else {
+                None
+            };
+
+            (&self.daily_points_cache[start_idx..], &self.daily_avg7_points_cache[start_idx..], bounds)
+        } else {
+            (&self.daily_points_cache, &self.daily_avg7_points_cache, self.daily_bounds_cache)
+        }
     }
 }
 

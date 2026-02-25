@@ -35,6 +35,17 @@ impl DateRangePreset {
             Self::All => "All",
         }
     }
+
+    /// Computes the starting `NaiveDate` for this preset, given the latest available date.
+    pub fn start_date(self, latest: chrono::NaiveDate) -> Option<chrono::NaiveDate> {
+        match self {
+            Self::Days7 => Some(latest - chrono::Days::new(6)),
+            Self::Days30 => Some(latest - chrono::Days::new(29)),
+            Self::Days90 => Some(latest - chrono::Days::new(89)),
+            Self::Ytd => chrono::NaiveDate::from_ymd_opt(latest.year(), 1, 1).or(Some(latest)),
+            Self::All => None,
+        }
+    }
 }
 
 /// A single data point representing electric usage at a specific time.
@@ -612,39 +623,97 @@ impl ElectricData {
         start_idx..meta.len()
     }
 
-    /// Returns plot-ready points for daily charts without per-frame allocation.
-    pub fn daily_plot_points_cached(&self) -> &[PlotPoint] {
-        &self.daily_points_cache
+    /// Returns plot-ready points and 7-day average points filtered by the preset range.
+    pub fn daily_plot_points_filtered(&self, preset: DateRangePreset) -> (&[PlotPoint], &[PlotPoint], Option<(f64, f64)>) {
+        if self.daily_totals_cache.is_empty() {
+            return (&[], &[], None);
+        }
+
+        let latest = self.daily_totals_cache.last().unwrap().0.date_naive();
+        if let Some(start_date) = preset.start_date(latest) {
+            let start_idx = self
+                .daily_totals_cache
+                .iter()
+                .position(|(dt, _)| dt.date_naive() >= start_date)
+                .unwrap_or(0);
+
+            let bounds = if start_idx < self.daily_totals_cache.len() {
+                Some((
+                    self.daily_totals_cache[start_idx].0.timestamp() as f64,
+                    self.daily_totals_cache.last().unwrap().0.timestamp() as f64,
+                ))
+            } else {
+                None
+            };
+
+            (&self.daily_points_cache[start_idx..], &self.daily_avg7_points_cache[start_idx..], bounds)
+        } else {
+            (&self.daily_points_cache, &self.daily_avg7_points_cache, self.daily_bounds_cache)
+        }
     }
 
-    /// Returns plot-ready 7-day average points without per-frame allocation.
-    pub fn daily_avg7_plot_points_cached(&self) -> &[PlotPoint] {
-        &self.daily_avg7_points_cache
+    /// Computes the weekday/hour heatmap dynamically based on a filtered date range.
+    pub fn weekday_hour_heatmap_filtered(&self, preset: DateRangePreset) -> (Vec<Vec<f64>>, f64) {
+        if self.data.is_empty() || preset == DateRangePreset::All {
+            return (self.weekday_hour_heatmap_cache.clone(), self.weekday_hour_heatmap_max_cache);
+        }
+
+        let latest = self.data.last().unwrap().timestamp.date_naive();
+        if let Some(start_date) = preset.start_date(latest) {
+            let start_idx = self
+                .data
+                .iter()
+                .position(|p| p.timestamp.date_naive() >= start_date)
+                .unwrap_or(0);
+
+            let filtered_data = &self.data[start_idx..];
+            let averages = Self::compute_weekday_hour_average(filtered_data);
+            let heatmap = averages.iter().map(|day| day.to_vec()).collect();
+            let max_val = averages.iter().flat_map(|day| day.iter()).copied().fold(0.0_f64, f64::max);
+            (heatmap, max_val)
+        } else {
+            (self.weekday_hour_heatmap_cache.clone(), self.weekday_hour_heatmap_max_cache)
+        }
     }
 
-    /// Returns x-bounds for daily charts.
-    pub fn daily_chart_bounds(&self) -> Option<(f64, f64)> {
-        self.daily_bounds_cache
+    /// Computes the hourly profile dynamically based on a filtered date range.
+    pub fn hourly_profile_filtered(&self, preset: DateRangePreset) -> [f64; 24] {
+        if self.data.is_empty() || preset == DateRangePreset::All {
+            return self.hourly_profile_cache;
+        }
+
+        let latest = self.data.last().unwrap().timestamp.date_naive();
+        if let Some(start_date) = preset.start_date(latest) {
+            let start_idx = self
+                .data
+                .iter()
+                .position(|p| p.timestamp.date_naive() >= start_date)
+                .unwrap_or(0);
+
+            Self::compute_hourly_profile(&self.data[start_idx..])
+        } else {
+            self.hourly_profile_cache
+        }
     }
 
-    /// Returns cached weekday/hour heatmap rows without per-frame allocations.
-    pub fn weekday_hour_heatmap_cached(&self) -> &[Vec<f64>] {
-        &self.weekday_hour_heatmap_cache
-    }
+    /// Computes the hourly export profile dynamically based on a filtered date range.
+    pub fn hourly_export_profile_filtered(&self, preset: DateRangePreset) -> [f64; 24] {
+        if self.data.is_empty() || preset == DateRangePreset::All {
+            return self.hourly_export_profile_cache;
+        }
 
-    /// Returns cached weekday/hour heatmap max value.
-    pub fn weekday_hour_heatmap_max_cached(&self) -> f64 {
-        self.weekday_hour_heatmap_max_cache
-    }
+        let latest = self.data.last().unwrap().timestamp.date_naive();
+        if let Some(start_date) = preset.start_date(latest) {
+            let start_idx = self
+                .data
+                .iter()
+                .position(|p| p.timestamp.date_naive() >= start_date)
+                .unwrap_or(0);
 
-    /// Returns cached hourly profile without recomputation.
-    pub fn hourly_profile_cached(&self) -> &[f64; 24] {
-        &self.hourly_profile_cache
-    }
-
-    /// Returns cached hourly export profile without recomputation.
-    pub fn hourly_export_profile_cached(&self) -> &[f64; 24] {
-        &self.hourly_export_profile_cache
+            Self::compute_hourly_export_profile(&self.data[start_idx..])
+        } else {
+            self.hourly_export_profile_cache
+        }
     }
 
     /// Returns filtered energy heatmap slices for a quick-range preset.

@@ -2,10 +2,14 @@ use crate::data::ElectricData;
 use egui::Ui;
 use egui_plot::{GridMark, Line, Plot, PlotPoints};
 
-pub fn render_hourly_profile(ui: &mut Ui, data: &ElectricData) {
+pub fn render_hourly_profile(
+    ui: &mut Ui,
+    data: &ElectricData,
+    preset: crate::data::DateRangePreset,
+) {
     ui.add_space(crate::ui::styles::CHART_SPACING);
-    let profile = data.hourly_profile_cached();
-    let export_profile = data.hourly_export_profile_cached();
+    let profile = data.hourly_profile_filtered(preset);
+    let export_profile = data.hourly_export_profile_filtered(preset);
 
     // Convert Points (All points)
     let points: PlotPoints = profile

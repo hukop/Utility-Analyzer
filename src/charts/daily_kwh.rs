@@ -7,19 +7,21 @@ pub fn render_daily_kwh(
     ui: &mut Ui,
     data: &ElectricData,
     state: &mut crate::charts::ChartZoomState,
+    preset: crate::data::DateRangePreset,
 ) {
     ui.add_space(crate::ui::styles::CHART_SPACING);
 
-    let Some((min_ts, max_ts)) = data.daily_chart_bounds() else {
+    let (points, avg7_points, bounds) = data.daily_plot_points_filtered(preset);
+    let Some((min_ts, max_ts)) = bounds else {
         ui.label("No data available");
         return;
     };
 
-    let line = Line::new("Daily kWh", data.daily_plot_points_cached())
+    let line = Line::new("Daily kWh", points)
         .color(crate::ui::styles::primary_chart_color())
         .width(2.0);
 
-    let smooth_line = Line::new("7-day average", data.daily_avg7_plot_points_cached())
+    let smooth_line = Line::new("7-day average", avg7_points)
         .color(crate::ui::styles::average_chart_color())
         .width(2.0)
         .style(egui_plot::LineStyle::Dashed { length: 10.0 });
@@ -29,6 +31,7 @@ pub fn render_daily_kwh(
         state,
         "daily_kwh",
         (min_ts, max_ts),
+        Some(preset),
         [line, smooth_line],
     );
 }

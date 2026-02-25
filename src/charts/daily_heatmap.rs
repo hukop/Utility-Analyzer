@@ -91,12 +91,11 @@ fn render_heat_legend(
     unit: &str,
     palette: crate::charts::HeatmapPalette,
 ) {
-    let rect = ui.available_rect_before_wrap();
+    ui.horizontal(|ui| {
+        ui.spacing_mut().item_spacing.x = 8.0;
 
-    // Color blocks on the left of the legend slot
-    let blocks_rect = egui::Rect::from_min_size(rect.min, egui::vec2(90.0, rect.height()));
-    ui.scope_builder(egui::UiBuilder::new().max_rect(blocks_rect), |ui| {
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+        // Color blocks on the left
+        ui.horizontal(|ui| {
             ui.spacing_mut().item_spacing.x = 1.0;
             for i in 0..10 {
                 let t0 = i as f64 / 10.0;
@@ -107,19 +106,17 @@ fn render_heat_legend(
                 ui.painter().rect_filled(rect, 1.0, color);
             }
         });
-    });
 
-    // Label on the right ([0 to X unit])
-    let label_x = rect.min.x + 98.0; // 90px blocks + 8px spacer
-    let label_rect = egui::Rect::from_min_size(egui::pos2(label_x, rect.min.y), egui::vec2(90.0, rect.height()));
-    ui.scope_builder(egui::UiBuilder::new().max_rect(label_rect), |ui| {
-        ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
-            ui.label(
+        // Label on the right
+        // We give it a fixed minimum width so that switching 'kWh' to '$' doesn't shift the toggle button
+        ui.add_sized(
+            [60.0, 10.0],
+            egui::Label::new(
                 egui::RichText::new(format!("0 to {:.1} {}", max_val, unit))
                     .size(11.0)
                     .color(ui.visuals().text_color().gamma_multiply(0.75)),
-            );
-        });
+            ),
+        );
     });
 }
 
@@ -145,55 +142,45 @@ pub fn render_daily_heatmap_with_toggle(
     ui.heading(title);
     ui.add_space(4.0);
 
-    let row_rect = ui.available_rect_before_wrap();
-    let right = row_rect.max.x;
-    let left = row_rect.min.x;
-    let top = row_rect.min.y;
-
-    // Slot 1: Selection guidance text (Anchored to Left, Force Left Alignment)
-    let label_rect = egui::Rect::from_min_size(egui::pos2(left, top), egui::vec2(380.0, 28.0));
-    ui.scope_builder(egui::UiBuilder::new().max_rect(label_rect), |ui| {
+    ui.horizontal(|ui| {
+        // Slot 1: Selection guidance text (Anchored to Left)
         ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
             ui.label(selection_text);
         });
+
+        // Remaining space pushes elements to the right
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            // Slot 3: Legend (Anchored to Right Edge)
+            render_heat_legend(ui, legend_max, legend_unit, state.palette);
+
+            // 24px gap requested between Legend and Button
+            ui.add_space(24.0);
+
+            // Slot 2: Metric Toggle
+            if modern_ui {
+                // Properly reserve space in the layout so parent handles positioning,
+                // then apply our visual translation to that exact footprint.
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(140.0, 28.0), egui::Sense::hover());
+                let offset_rect = rect.translate(egui::vec2(0.0, toggle_y_offset));
+
+                ui.scope_builder(egui::UiBuilder::new().max_rect(offset_rect), |ui| {
+                    let options = [
+                        (HeatmapMetric::Energy, "Energy"),
+                        (HeatmapMetric::Cost, "Cost"),
+                    ];
+                    crate::ui::components::render_segmented_control(ui, metric, &options);
+                });
+            } else {
+                render_heatmap_toggle_buttons(
+                    ui,
+                    *metric,
+                    |new_metric| *metric = new_metric,
+                    0.0,
+                );
+            }
+        });
     });
 
-    // Slot 3: Legend (Anchored to Right Edge)
-    let legend_width = 185.0;
-    let legend_rect = egui::Rect::from_min_size(egui::pos2(right - legend_width, top), egui::vec2(legend_width, 28.0));
-    ui.scope_builder(egui::UiBuilder::new().max_rect(legend_rect), |ui| {
-        render_heat_legend(ui, legend_max, legend_unit, state.palette);
-    });
-
-    // Slot 2: Metric Toggle (Middle-Right, Anchored relative to Legend)
-    let buttons_width = 140.0;
-    let buttons_gap = 24.0;
-    let buttons_x = right - legend_width - buttons_gap - buttons_width;
-    let mut buttons_rect = egui::Rect::from_min_size(egui::pos2(buttons_x, top), egui::vec2(buttons_width, 28.0));
-
-    if modern_ui {
-        buttons_rect = buttons_rect.translate(egui::vec2(0.0, toggle_y_offset));
-    }
-
-    ui.scope_builder(egui::UiBuilder::new().max_rect(buttons_rect), |ui| {
-        if modern_ui {
-            let options = [
-                (HeatmapMetric::Energy, "Energy"),
-                (HeatmapMetric::Cost, "Cost"),
-            ];
-            crate::ui::components::render_segmented_control(ui, metric, &options);
-        } else {
-            render_heatmap_toggle_buttons(
-                ui,
-                *metric,
-                |new_metric| *metric = new_metric,
-                0.0,
-            );
-        }
-    });
-
-    // Advance cursor past the header row (28px height + spacing)
-    ui.advance_cursor_after_rect(egui::Rect::from_min_size(row_rect.min, egui::vec2(row_rect.width(), 32.0)));
     ui.add_space(8.0);
 
     match *metric {

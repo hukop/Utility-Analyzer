@@ -227,10 +227,8 @@ impl PgeAnalyzerApp {
     }
 
     fn is_range_enabled_view(&self) -> bool {
-        matches!(
-            self.current_view,
-            ChartView::DailyHeatmap | ChartView::ExportSparklines
-        )
+        // Quick range is now universally supported across all charts
+        true
     }
 
     fn visible_range_label(&self) -> Option<String> {
@@ -316,16 +314,6 @@ impl PgeAnalyzerApp {
             .inner_margin(egui::Margin::symmetric(10, 8))
             .show(ui, |ui| {
                 ui.horizontal(|ui| {
-                    let collapse_label = if self.sidebar_collapsed {
-                        "Expand Sidebar"
-                    } else {
-                        "Collapse Sidebar"
-                    };
-                    if ui.small_button(collapse_label).clicked() {
-                        self.sidebar_collapsed = !self.sidebar_collapsed;
-                    }
-
-                    ui.separator();
                     ui.label(
                         egui::RichText::new("Quick Range")
                             .size(crate::ui::styles::BODY_FONT_SIZE)
@@ -590,7 +578,7 @@ impl PgeAnalyzerApp {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Daily kWh");
                     ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
-                        charts::render_daily_kwh(ui, data, &mut self.zoom_state);
+                        charts::render_daily_kwh(ui, data, &mut self.zoom_state, self.range_preset);
                     });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -604,6 +592,7 @@ impl PgeAnalyzerApp {
                             data,
                             &mut self.heatmap_state,
                             self.config.ui.modern_ui,
+                            self.range_preset,
                         );
                     });
                 } else {
@@ -630,7 +619,7 @@ impl PgeAnalyzerApp {
                 if let Some(ref data) = self.electric_data {
                     ui.heading("Average Daily Profile (Mean kWh by Hour)");
                     ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
-                        charts::render_hourly_profile(ui, data);
+                        charts::render_hourly_profile(ui, data, self.range_preset);
                     });
                 } else {
                     ui.label("No electric data loaded. Please load a CSV file.");
@@ -655,7 +644,7 @@ impl PgeAnalyzerApp {
                 if let Some(ref data) = self.gas_data {
                     ui.heading("Gas: Daily Usage (USD)");
                     ui::components::Card::new().show(ui, self.config.ui.modern_ui, |ui| {
-                        charts::render_gas_daily(ui, data, &mut self.zoom_state);
+                        charts::render_gas_daily(ui, data, &mut self.zoom_state, self.range_preset);
                     });
                 } else {
                     ui.label("No gas data loaded. Please load a CSV file.");

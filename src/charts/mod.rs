@@ -92,6 +92,8 @@ pub struct HeatmapState {
 pub struct ChartZoomState {
     /// Stores current [min_x, max_x] visible range for each chart ID
     pub bounds: std::collections::HashMap<&'static str, (f64, f64)>,
+    /// The date range preset active when these bounds were set.
+    pub last_preset: Option<crate::data::DateRangePreset>,
 }
 
 /// Renders a daily time-series chart with zoom functionality.
@@ -101,12 +103,18 @@ pub fn render_zoomable_daily_chart<'a, I>(
     state: &mut ChartZoomState,
     chart_id: &'static str,
     initial_bounds: (f64, f64),
+    preset: Option<crate::data::DateRangePreset>,
     lines: I,
 ) where
     I: IntoIterator<Item = egui_plot::Line<'a>>,
 {
     use chrono::DateTime;
     use egui_plot::{Plot, PlotBounds};
+
+    if state.last_preset != preset {
+        state.bounds.clear();
+        state.last_preset = preset;
+    }
 
     let entry = state.bounds.entry(chart_id).or_insert(initial_bounds);
     let (start_ref, end_ref) = entry;
