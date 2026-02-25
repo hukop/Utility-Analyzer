@@ -1,6 +1,6 @@
 # PG&E Usage Analyzer - Rust GUI Application
 
-A modern Windows GUI application for visualizing PG&E electric and gas usage data, built with Rust.
+A modern, cross-platform GUI application for visualizing PG&E electric and gas usage data, built with Rust.
 
 ## Features
 
@@ -22,28 +22,19 @@ A modern Windows GUI application for visualizing PG&E electric and gas usage dat
 
 ### Prerequisites
 
-- Rust toolchain (already installed)
-- Windows 10/11
+- Rust toolchain
+- Windows 10/11, macOS, or Linux
 
 ### Build Instructions
 
-#### Option 1: Debug Build (Faster compilation)
-
-```powershell
-cd c:\proj\PGE\pge-analyzer
-cargo build
-```
-
-The executable will be at: `target\debug\pge-analyzer.exe`
-
-#### Option 2: Release Build (Optimized performance)
-
-```powershell
-cd c:\proj\PGE\pge-analyzer
+```bash
+cd pge-analyzer
 cargo build --release
 ```
 
-The executable will be at: `target\release\pge-analyzer.exe`
+The executable will be at:
+- Windows: `target\release\pge-analyzer.exe`
+- macOS/Linux: `target/release/pge-analyzer`
 
 ### Troubleshooting Build Issues
 
@@ -79,31 +70,27 @@ If you encounter "The process cannot access the file" errors (Error 32), this is
 
 ### From the Build Directory
 
-```powershell
-cd c:\proj\PGE\pge-analyzer
+```bash
+cd pge-analyzer
 cargo run
 ```
 
 ### Or Run the Executable Directly
 
+**Windows:**
 ```powershell
-# Debug build
-.\target\debug\pge-analyzer.exe
-
-# Release build (recommended for production)
 .\target\release\pge-analyzer.exe
+```
+
+**macOS/Linux:**
+```bash
+./target/release/pge-analyzer
 ```
 
 ## Agent guide and sample data
 
 For assistants and local testing, see `docs/AGENT_GUIDE.md` and the small synthetic samples in `data/samples/`.
 
-
-### Windows GUI Application
-
-**✅ No Console Window**: The Windows release build is configured as a GUI application, so when you double-click the executable, only the application window opens - no terminal window appears.
-
-**Note**: The debug build (`cargo run`) will still show a console window for development purposes. Use the release build for the best user experience.
 
 ## Usage
 
@@ -120,33 +107,7 @@ For assistants and local testing, see `docs/AGENT_GUIDE.md` and the small synthe
    - Scroll through large heatmaps
    - Resize the window as needed
 
-## Project Structure
 
-```
-pge-analyzer/
-├── src/
-│   ├── main.rs              # Application entry point
-│   ├── config.rs            # Configuration management
-│   ├── data/                # Data loading and processing
-│   │   ├── mod.rs
-│   │   ├── loader.rs        # CSV file handling
-│   │   ├── electric.rs      # Electric data structures
-│   │   └── gas.rs           # Gas data structures
-│   ├── charts/              # Chart rendering modules
-│   │   ├── mod.rs
-│   │   ├── daily_kwh.rs
-│   │   ├── weekday_heatmap.rs
-│   │   ├── daily_heatmap.rs
-│   │   ├── cost_heatmap.rs
-│   │   ├── profile.rs
-│   │   └── gas_daily.rs
-│   └── ui/                  # UI components and styling
-│       ├── mod.rs
-│       └── styles.rs
-├── build.rs                 # Windows GUI subsystem configuration
-├── config.example.toml       # Sample configuration file
-└── Cargo.toml               # Dependencies and configuration
-```
 
 ## Dependencies
 
