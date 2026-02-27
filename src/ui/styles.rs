@@ -50,7 +50,6 @@ pub fn apply_custom_style(ctx: &Context, dark_mode_pref: Option<bool>) {
 }
 
 pub const CHART_SPACING: f32 = 20.0;
-pub const WINDOW_ROUNDING: f32 = 12.0;
 
 // Sidebar & Layout Tokens
 pub const SIDEBAR_SECTION_SIZE: f32 = 15.0;
@@ -84,15 +83,6 @@ pub fn panel_bg() -> egui::Color32 {
 
 pub fn theme_accent() -> egui::Color32 {
     egui::Color32::from_rgb(0, 120, 212)
-}
-
-/// Returns the actual intended window background color for themes.
-pub fn actual_window_background(ctx: &egui::Context) -> egui::Color32 {
-    if ctx.style().visuals.dark_mode {
-        egui::Color32::from_rgb(32, 32, 32)
-    } else {
-        window_bg()
-    }
 }
 
 pub fn widget_bg() -> egui::Color32 {

@@ -16,11 +16,6 @@ use data::{DateRangePreset, ElectricData, GasData};
 use std::path::{Path, PathBuf};
 use ui::{ChartView, HeatmapMetric};
 
-#[cfg(target_os = "windows")]
-const USE_CUSTOM_WINDOW_CHROME: bool = false;
-#[cfg(not(target_os = "windows"))]
-const USE_CUSTOM_WINDOW_CHROME: bool = true;
-
 struct PgeAnalyzerApp {
     config: Config,
     electric_data: Option<ElectricData>,
@@ -30,7 +25,6 @@ struct PgeAnalyzerApp {
     data_dir: PathBuf,
     heatmap_state: charts::HeatmapState,
     heatmap_metric: HeatmapMetric,
-    resize_state: ui::WindowResizeState,
     last_sync_pos: Option<egui::Pos2>,
     last_sync_size: Option<egui::Vec2>,
     last_sync_maximized: bool,
@@ -67,7 +61,6 @@ impl Default for PgeAnalyzerApp {
             data_dir,
             heatmap_state,
             heatmap_metric: HeatmapMetric::default(),
-            resize_state: ui::WindowResizeState::new(),
             last_sync_pos: None,
             last_sync_size: None,
             last_sync_maximized: false,
@@ -774,18 +767,16 @@ impl PgeAnalyzerApp {
     fn sync_native_titlebar_theme(&mut self, ctx: &egui::Context, frame: &eframe::Frame) {
         #[cfg(target_os = "windows")]
         {
-            if !USE_CUSTOM_WINDOW_CHROME {
-                let wants_dark = self.config.ui.dark_mode.unwrap_or(false);
-                if self.last_sync_native_titlebar_dark != Some(wants_dark) {
-                    let theme = if wants_dark {
-                        egui::SystemTheme::Dark
-                    } else {
-                        egui::SystemTheme::Light
-                    };
-                    ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(theme));
-                    self.apply_native_titlebar_colors(frame, wants_dark);
-                    self.last_sync_native_titlebar_dark = Some(wants_dark);
-                }
+            let wants_dark = self.config.ui.dark_mode.unwrap_or(false);
+            if self.last_sync_native_titlebar_dark != Some(wants_dark) {
+                let theme = if wants_dark {
+                    egui::SystemTheme::Dark
+                } else {
+                    egui::SystemTheme::Light
+                };
+                ctx.send_viewport_cmd(egui::ViewportCommand::SetTheme(theme));
+                self.apply_native_titlebar_colors(frame, wants_dark);
+                self.last_sync_native_titlebar_dark = Some(wants_dark);
             }
         }
         #[cfg(not(target_os = "windows"))]
@@ -813,33 +804,7 @@ impl eframe::App for PgeAnalyzerApp {
         }
         self.sync_native_titlebar_theme(ctx, frame);
 
-        if USE_CUSTOM_WINDOW_CHROME {
-            // Update resize state before painting so we can adjust background rendering
-            // while the OS is actively resizing the frameless window.
-            ui::handle_window_resize(ctx, &mut self.resize_state);
-
-            // 1. Paint the main window background manually on the background layer
-            let is_maximized = ctx.input(|i| i.viewport().maximized.unwrap_or(false));
-            let rounding = if is_maximized || self.resize_state.is_resizing() {
-                0.0
-            } else {
-                ui::styles::WINDOW_ROUNDING
-            };
-            let bg_color = ui::actual_window_background(ctx);
-
-            ctx.layer_painter(egui::LayerId::background()).rect_filled(
-                ctx.viewport_rect(),
-                egui::CornerRadius::same(rounding as u8),
-                bg_color,
-            );
-
-            // 2. Border stroke removed - custom title bar handles visual boundaries
-        }
-
         // --- Custom Panels (Transparent) ---
-        if USE_CUSTOM_WINDOW_CHROME {
-            ui::render_title_bar(ctx, "PG&E Usage Analyzer");
-        }
 
         let sidebar_width = if self.sidebar_collapsed { 44.0 } else { 180.0 };
         egui::SidePanel::left("sidebar_panel")
@@ -849,9 +814,6 @@ impl eframe::App for PgeAnalyzerApp {
             .min_width(sidebar_width)
             .max_width(sidebar_width)
             .show(ctx, |ui| {
-                if USE_CUSTOM_WINDOW_CHROME {
-                    ui.add_space(20.0); // Space for top rounding
-                }
                 egui::Frame::NONE
                     .inner_margin(egui::Margin::symmetric(10, 0))
                     .show(ui, |ui| {
@@ -871,17 +833,11 @@ impl eframe::App for PgeAnalyzerApp {
                     }),
             )
             .show(ctx, |ui| {
-                if USE_CUSTOM_WINDOW_CHROME {
-                    ui.add_space(10.0);
-                }
                 self.render_command_bar(ui);
                 ui.add_space(8.0);
                 self.render_main_content(ui);
             });
 
-        if USE_CUSTOM_WINDOW_CHROME {
-            self.resize_state.apply_cursor(ctx);
-        }
         self.handle_window_persistence(ctx);
     }
 }
@@ -916,9 +872,8 @@ fn run_app() -> Result<(), eframe::Error> {
     let mut viewport = egui::ViewportBuilder::default()
         .with_inner_size([config.window.width, config.window.height])
         .with_title("PG&E Usage Analyzer")
-        .with_decorations(!USE_CUSTOM_WINDOW_CHROME)
+        .with_decorations(true)
         .with_transparent(false)
-        .with_has_shadow(USE_CUSTOM_WINDOW_CHROME)
         .with_min_inner_size([400.0, 300.0]);
 
     if let (Some(x), Some(y)) = (config.window.x, config.window.y) {
